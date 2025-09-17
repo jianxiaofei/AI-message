@@ -1,0 +1,167 @@
+{
+  "name": "ai-message",
+  "displayName": "AI-message",
+  "description": "Generate intelligent commit messages using AI for Git and SVN repositories",
+  "version": "0.0.22",
+  "publisher": "jianxiaofei",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jianxiaofei/AI-message"
+  },
+  "author": "jianxiaofei",
+  "license": "MIT",
+  "homepage": "https://github.com/jianxiaofei/AI-message#readme",
+  "bugs": {
+    "url": "https://github.com/jianxiaofei/AI-message/issues"
+  },
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "icon": "images/icon.png",
+  "categories": [
+    "Other",
+    "SCM Providers"
+  ],
+  "keywords": [
+    "svn",
+    "git",
+    "commit",
+    "ai",
+    "copilot",
+    "message",
+    "version control",
+    "scm",
+    "artificial intelligence",
+    "conventional commits",
+    "auto-generate",
+    "github copilot"
+  ],
+  "extensionDependencies": [
+    "GitHub.copilot"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ai-message.generateCommitMessage",
+        "title": "生成提交信息",
+        "category": "AI Message",
+        "icon": {
+          "dark": "./images/ai-icon-dark.svg",
+          "light": "./images/ai-icon-light.svg"
+        }
+      },
+      {
+        "command": "ai-message.quickCommit",
+        "title": "快速生成提交信息",
+        "category": "AI Message",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "ai-message.configureAI",
+        "title": "配置 AI 设置",
+        "category": "AI Message"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "ai-message.generateCommitMessage",
+          "group": "z_ai_message"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "ai-message.generateCommitMessage",
+          "group": "z_ai_message"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "ai-message.generateCommitMessage",
+          "when": "scmProvider",
+          "group": "navigation@1"
+        }
+      ],
+      "scm/resourceState/context": [
+        {
+          "command": "ai-message.generateCommitMessage",
+          "group": "1_modification",
+          "when": "scmProvider"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "ai-message.generateCommitMessage",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g"
+      },
+      {
+        "command": "ai-message.quickCommit",
+        "key": "ctrl+alt+q",
+        "mac": "cmd+alt+q"
+      }
+    ],
+    "configuration": {
+      "title": "AI Message",
+      "properties": {
+        "aiMessage.svn.path": {
+          "type": "string",
+          "default": "",
+          "description": "可选：自定义 svn 可执行文件路径（例如 /opt/homebrew/bin/svn）",
+          "order": 1
+        },
+        "aiMessage.git.path": {
+          "type": "string",
+          "default": "",
+          "description": "可选：自定义 git 可执行文件路径（例如 /usr/local/bin/git）",
+          "order": 2
+        },
+        "aiMessage.commitTemplate": {
+          "type": "string",
+          "default": "",
+          "description": "提交信息模板 (可选，用 {message} 占位符代表AI生成的信息)",
+          "order": 3
+        },
+        "aiMessage.enableFallback": {
+          "type": "boolean",
+          "default": true,
+          "description": "当 Copilot 不可用时，启用基于规则的后备提交信息生成",
+          "order": 4
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "version-patch": "npm version patch --no-git-tag-version",
+    "build-and-package": "npm run version-patch && npm run package && vsce package --out releases/",
+    "package-only": "vsce package --out releases/",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.104.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@typescript-eslint/eslint-plugin": "^8.42.0",
+    "@typescript-eslint/parser": "^8.42.0",
+    "eslint": "^9.34.0",
+    "esbuild": "^0.25.9",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.9.2",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}

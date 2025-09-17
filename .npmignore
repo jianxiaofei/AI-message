@@ -1,0 +1,45 @@
+# Source files
+src/
+**/*.ts
+**/*.map
+
+# Build outputs (except dist)
+out/
+
+# Development files
+.vscode/
+.vscode-test/
+.vscode-test.mjs
+.gitignore
+.vscodeignore
+esbuild.js
+tsconfig.json
+eslint.config.mjs
+
+# Documentation files
+vsc-extension-quickstart.md
+CONTRIBUTING.md
+PUBLISHING.md
+SECURITY.md
+SCM_BUTTON_TEST.md
+FEATURES_COMPLETED.md
+
+# Extension packages
+*.vsix
+
+# CI/CD
+.github/
+
+# System files
+.DS_Store
+Thumbs.db
+*.log
+
+# Test files
+**/test/
+**/*.test.*
+**/*.spec.*
+
+# Git files
+.git/
+.gitignore

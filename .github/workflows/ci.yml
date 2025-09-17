@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18.x
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Run type checking
+      run: npm run check-types
+      
+    - name: Run linting
+      run: npm run lint
+      
+    - name: Compile extension
+      run: npm run compile
+      
+    - name: Run tests
+      run: |
+        # 在 Linux 上运行测试需要 xvfb
+        if [ "$RUNNER_OS" == "Linux" ]; then
+          xvfb-run -a npm test
+        else
+          npm test
+        fi
+      shell: bash
+      
+    - name: Package extension
+      run: npm run package

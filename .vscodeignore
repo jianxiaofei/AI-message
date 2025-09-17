@@ -1,0 +1,51 @@
+# VS Code specific
+.vscode/**
+.vscode-test/**
+.vscode-test.mjs
+
+# Build outputs (keep dist for production)
+out/**
+node_modules/**
+
+# Source files (only include compiled dist)
+src/**
+**/*.ts
+**/*.map
+
+# Development files
+.gitignore
+.yarnrc
+esbuild.js
+tsconfig.json
+eslint.config.mjs
+
+# Documentation that shouldn't be in extension
+vsc-extension-quickstart.md
+CONTRIBUTING.md
+PUBLISHING.md
+SECURITY.md
+SCM_BUTTON_TEST.md
+FEATURES_COMPLETED.md
+
+# Extension packages
+*.vsix
+releases/
+
+# Build and development artifacts
+**/.git/**
+**/.github/**
+**/.DS_Store
+**/Thumbs.db
+**/*.log
+
+# Test files
+**/test/**
+**/*.test.*
+**/*.spec.*
+
+# CI/CD files
+.github/**
+
+# Package files we don't need in extension
+package-lock.json
+yarn.lock
