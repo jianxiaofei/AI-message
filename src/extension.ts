@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { VcsFactory } from './vcsFactory';
 import { IVersionControlService } from './vcsInterface';
-import { AIService } from './aiService';
+import { AIService } from './aiProviderFactory';
 
 let vcsService: IVersionControlService | null = null;
 let aiService: AIService;
@@ -28,7 +28,12 @@ function registerCommands(context: vscode.ExtensionContext) {
         handleQuickCommit
     );
     
-    context.subscriptions.push(generateCommand, quickCommand);
+    const configureCommand = vscode.commands.registerCommand(
+        'ai-message.configureAI',
+        handleConfigureAI
+    );
+    
+    context.subscriptions.push(generateCommand, quickCommand, configureCommand);
 }
 
 async function handleGenerateCommitMessage() {
@@ -452,6 +457,98 @@ async function showCommitHelp() {
         console.error('显示帮助信息时发生错误:', error);
         vscode.window.showInformationMessage('请参考扩展说明或联系支持');
     }
+}
+
+async function handleConfigureAI() {
+    try {
+        const status = await aiService.getProviderStatus();
+        const currentProvider = aiService.getCurrentProviderName();
+        
+        interface ProviderQuickPickItem extends vscode.QuickPickItem {
+            provider: string;
+        }
+        
+        const items: ProviderQuickPickItem[] = [
+            {
+                label: '$(gear) 查看当前AI提供商状态',
+                description: `当前: ${currentProvider}`,
+                provider: 'status'
+            },
+            {
+                label: '$(settings) 打开AI设置',
+                description: '配置AI提供商和参数',
+                provider: 'settings'
+            },
+            {
+                label: '$(refresh) 测试AI连接',
+                description: '检查所有AI提供商的可用性',
+                provider: 'test'
+            }
+        ];
+
+        const selection = await vscode.window.showQuickPick(items, {
+            placeHolder: '选择AI配置操作'
+        });
+
+        if (!selection) {
+            return;
+        }
+
+        switch (selection.provider) {
+            case 'status':
+                await showProviderStatus(status, currentProvider);
+                break;
+            case 'settings':
+                await vscode.commands.executeCommand('workbench.action.openSettings', 'aiMessage.ai');
+                break;
+            case 'test':
+                await testAIConnection();
+                break;
+        }
+    } catch (error) {
+        await handleError('配置AI设置时发生错误', error);
+    }
+}
+
+async function showProviderStatus(status: { name: string; available: boolean; error?: string }[], currentProvider: string) {
+    const statusText = status.map(s => {
+        const icon = s.available ? '✅' : '❌';
+        const current = s.name === currentProvider ? ' (当前)' : '';
+        const error = s.error ? ` - ${s.error}` : '';
+        return `${icon} ${s.name}${current}${error}`;
+    }).join('\n');
+
+    await vscode.window.showInformationMessage(
+        `AI提供商状态:\n\n${statusText}`,
+        { modal: true },
+        '确定'
+    );
+}
+
+async function testAIConnection() {
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: "测试AI连接",
+        cancellable: false
+    }, async (progress) => {
+        progress.report({ increment: 0, message: "正在检查AI提供商..." });
+        
+        const status = await aiService.getProviderStatus();
+        const available = status.filter(s => s.available);
+        const unavailable = status.filter(s => !s.available);
+        
+        progress.report({ increment: 100, message: "测试完成" });
+        
+        let message = `测试完成!\n\n可用的AI提供商 (${available.length}个):\n`;
+        message += available.map(s => `✅ ${s.name}`).join('\n');
+        
+        if (unavailable.length > 0) {
+            message += `\n\n不可用的AI提供商 (${unavailable.length}个):\n`;
+            message += unavailable.map(s => `❌ ${s.name}${s.error ? ` - ${s.error}` : ''}`).join('\n');
+        }
+        
+        await vscode.window.showInformationMessage(message, { modal: true }, '确定');
+    });
 }
 
 async function handleError(context: string, error: any) {

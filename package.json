@@ -1,8 +1,8 @@
 {
   "name": "ai-message",
   "displayName": "AI-message",
-  "description": "Generate intelligent commit messages using AI for Git and SVN repositories",
-  "version": "0.0.22",
+  "description": "Generate intelligent commit messages using multiple AI providers (GitHub Copilot, Ollama, Qianwen, Wenxin, Zhipu) for Git and SVN repositories",
+  "version": "0.0.24",
   "publisher": "jianxiaofei",
   "repository": {
     "type": "git",
@@ -28,17 +28,21 @@
     "commit",
     "ai",
     "copilot",
+    "ollama",
+    "qianwen",
+    "wenxin",
+    "zhipu",
     "message",
     "version control",
     "scm",
     "artificial intelligence",
     "conventional commits",
     "auto-generate",
-    "github copilot"
+    "local llm",
+    "chinese ai",
+    "multi-model"
   ],
-  "extensionDependencies": [
-    "GitHub.copilot"
-  ],
+  "extensionDependencies": [],
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
@@ -61,7 +65,8 @@
       {
         "command": "ai-message.configureAI",
         "title": "配置 AI 设置",
-        "category": "AI Message"
+        "category": "AI Message",
+        "icon": "$(settings-gear)"
       }
     ],
     "menus": {
@@ -107,29 +112,152 @@
     "configuration": {
       "title": "AI Message",
       "properties": {
+        "aiMessage.ai.provider": {
+          "type": "string",
+          "enum": [
+            "copilot",
+            "ollama",
+            "qianwen",
+            "wenxin",
+            "zhipu",
+            "custom"
+          ],
+          "enumDescriptions": [
+            "使用 VS Code GitHub Copilot（推荐）",
+            "使用本地 Ollama 模型",
+            "使用阿里云通义千问",
+            "使用百度文心一言",
+            "使用智谱AI",
+            "自定义 API 接口"
+          ],
+          "default": "copilot",
+          "description": "选择AI提供商",
+          "order": 1
+        },
+        "aiMessage.ai.ollamaEndpoint": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama 服务器地址",
+          "order": 2
+        },
+        "aiMessage.ai.ollamaModel": {
+          "type": "string",
+          "default": "qwen2.5:7b",
+          "description": "Ollama 模型名称（例如：qwen2.5:7b, llama3:8b, codegemma:7b）",
+          "order": 3
+        },
+        "aiMessage.ai.qianwenApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "通义千问 API Key",
+          "order": 4
+        },
+        "aiMessage.ai.qianwenModel": {
+          "type": "string",
+          "enum": [
+            "qwen-max",
+            "qwen-plus",
+            "qwen-turbo",
+            "qwen-7b-chat",
+            "qwen-14b-chat",
+            "qwen-72b-chat"
+          ],
+          "default": "qwen-plus",
+          "description": "通义千问模型",
+          "order": 5
+        },
+        "aiMessage.ai.wenxinApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "文心一言 API Key",
+          "order": 6
+        },
+        "aiMessage.ai.wenxinSecretKey": {
+          "type": "string",
+          "default": "",
+          "description": "文心一言 Secret Key",
+          "order": 7
+        },
+        "aiMessage.ai.wenxinModel": {
+          "type": "string",
+          "enum": [
+            "ernie-4.0-8k",
+            "ernie-3.5-8k",
+            "ernie-speed-8k",
+            "ernie-lite-8k",
+            "ernie-tiny-8k"
+          ],
+          "default": "ernie-3.5-8k",
+          "description": "文心一言模型",
+          "order": 8
+        },
+        "aiMessage.ai.zhipuApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "智谱AI API Key",
+          "order": 9
+        },
+        "aiMessage.ai.zhipuModel": {
+          "type": "string",
+          "enum": [
+            "glm-4",
+            "glm-4-flash",
+            "glm-3-turbo",
+            "codegeex-4"
+          ],
+          "default": "glm-4",
+          "description": "智谱AI模型",
+          "order": 10
+        },
+        "aiMessage.ai.customEndpoint": {
+          "type": "string",
+          "default": "",
+          "description": "自定义 API 接口地址",
+          "order": 11
+        },
+        "aiMessage.ai.customApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "自定义 API Key",
+          "order": 12
+        },
+        "aiMessage.ai.customModel": {
+          "type": "string",
+          "default": "",
+          "description": "自定义模型名称",
+          "order": 13
+        },
+        "aiMessage.ai.timeout": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 5000,
+          "maximum": 120000,
+          "description": "API 请求超时时间（毫秒）",
+          "order": 14
+        },
         "aiMessage.svn.path": {
           "type": "string",
           "default": "",
           "description": "可选：自定义 svn 可执行文件路径（例如 /opt/homebrew/bin/svn）",
-          "order": 1
+          "order": 15
         },
         "aiMessage.git.path": {
           "type": "string",
           "default": "",
           "description": "可选：自定义 git 可执行文件路径（例如 /usr/local/bin/git）",
-          "order": 2
+          "order": 16
         },
         "aiMessage.commitTemplate": {
           "type": "string",
           "default": "",
           "description": "提交信息模板 (可选，用 {message} 占位符代表AI生成的信息)",
-          "order": 3
+          "order": 17
         },
         "aiMessage.enableFallback": {
           "type": "boolean",
           "default": true,
-          "description": "当 Copilot 不可用时，启用基于规则的后备提交信息生成",
-          "order": 4
+          "description": "当AI服务不可用时，启用基于规则的后备提交信息生成",
+          "order": 18
         }
       }
     }
