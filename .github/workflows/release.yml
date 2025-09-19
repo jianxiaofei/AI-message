@@ -47,19 +47,21 @@ jobs:
       run: npx @vscode/vsce publish -p ${{ secrets.VSCE_PAT }}
       env:
         NODE_OPTIONS: --no-warnings
+
+    - name: Package VSIX file
+      run: npx @vscode/vsce package
       
     - name: Create GitHub Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
         draft: false
         prerelease: false
+        generate_release_notes: true
+        files: '*.vsix'
         body: |
-          ## 🚀 新版本发布
+          ## 🚀 新版本发布 ${{ github.ref_name }}
 
           ### 主要更新
           - 详见 [CHANGELOG.md](CHANGELOG.md)
@@ -67,21 +69,20 @@ jobs:
           ### 安装方式
           - 从 VS Code 扩展市场搜索 "AI-message" 
           - 或使用命令: `code --install-extension jianxiaofei.ai-message`
+          - 或下载下方的 `.vsix` 文件手动安装
 
           ### 使用方法
           1. 在 Git/SVN 仓库中使用快捷键 `Ctrl+Alt+G` 生成提交信息
           2. 或使用命令面板搜索 "生成提交信息"
           3. 支持 GitHub Copilot、Ollama、千问等多种 AI 提供商
 
+          ### 🔧 技术特性
+          - 🤖 支持多种 AI 提供商：GitHub Copilot、Ollama、千问、文心一言、智谱AI
+          - 📝 智能提交信息生成，支持常规提交和约定式提交格式
+          - 🎯 完整的 Git 和 SVN 版本控制系统支持
+          - ⚡ 智能后备方案：当 AI 服务不可用时自动使用基于规则的生成
+
           ---
           完整更新日志请查看: [CHANGELOG.md](https://github.com/jianxiaofei/AI-message/blob/main/CHANGELOG.md)
-        
-    - name: Upload VSIX to Release
-      uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./ai-message-*.vsix
-        asset_name: ai-message-${{ github.ref_name }}.vsix
-        asset_content_type: application/zip
