@@ -2,7 +2,7 @@
   "name": "ai-message",
   "displayName": "AI-message",
   "description": "Generate intelligent commit messages using multiple AI providers (GitHub Copilot, Ollama, Qianwen, Wenxin, Zhipu) for Git and SVN repositories",
-  "version": "0.0.42",
+  "version": "0.0.43",
   "publisher": "jianxiaofei",
   "repository": {
     "type": "git",
@@ -301,6 +301,18 @@
           "default": false,
           "description": "启用详细的流式调试日志（包含fragment次数、长度、fallback情况）",
           "order": 24
+        },
+        "aiMessage.commit.intelligentBody": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用智能body生成（基于代码diff分析函数变更、导入变更等）",
+          "order": 25
+        },
+        "aiMessage.commit.bodyQualityCheck": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用body质量检查（长度检查、重复内容检查、格式标准化）",
+          "order": 26
         }
       }
     }
