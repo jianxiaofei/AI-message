@@ -4,23 +4,21 @@ import { BaseProvider } from './baseProvider';
 
 export class ZhipuProvider extends BaseProvider {
     readonly name = '智谱AI';
-    private config: AIConfig;
 
     constructor(config: AIConfig) {
-        super();
-        this.config = config;
+        super(config);
     }
 
     async isAvailable(): Promise<boolean> {
-        return !!this.config.zhipuApiKey;
+        return !!this.config?.zhipuApiKey;
     }
 
     async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {
-        if (!this.config.zhipuApiKey) {
+        if (!this.config?.zhipuApiKey) {
             throw new Error('请配置智谱AI API Key');
         }
 
-        const model = this.config.zhipuModel || 'glm-4';
+        const model = this.config?.zhipuModel || 'glm-4';
         const prompt = this.buildBasePrompt(diff, changedFiles);
         
         try {
@@ -28,7 +26,7 @@ export class ZhipuProvider extends BaseProvider {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.config.zhipuApiKey}`,
+                    'Authorization': `Bearer ${this.config?.zhipuApiKey}`,
                 },
                 body: JSON.stringify({
                     model: model,
@@ -42,7 +40,7 @@ export class ZhipuProvider extends BaseProvider {
                     top_p: 0.9,
                     max_tokens: 2000
                 })
-            }, this.config.timeout || 30000);
+            }, this.config?.timeout || 30000);
 
             if (!response.ok) {
                 const errorData = await response.text();

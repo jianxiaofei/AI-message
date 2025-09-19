@@ -2,7 +2,7 @@
   "name": "ai-message",
   "displayName": "AI-message",
   "description": "Generate intelligent commit messages using multiple AI providers (GitHub Copilot, Ollama, Qianwen, Wenxin, Zhipu) for Git and SVN repositories",
-  "version": "0.0.24",
+  "version": "0.0.42",
   "publisher": "jianxiaofei",
   "repository": {
     "type": "git",
@@ -258,6 +258,49 @@
           "default": true,
           "description": "当AI服务不可用时，启用基于规则的后备提交信息生成",
           "order": 18
+        },
+        "aiMessage.commit.enableEmoji": {
+          "type": "boolean",
+          "default": true,
+          "description": "在提交信息中启用 emoji 图标",
+          "order": 19
+        },
+        "aiMessage.commit.enableBody": {
+          "type": "boolean",
+          "default": true,
+          "description": "在提交信息中包含详细的正文内容",
+          "order": 20
+        },
+        "aiMessage.commit.enableScope": {
+          "type": "boolean",
+          "default": true,
+          "description": "在提交信息中自动推断和添加作用域 (scope)",
+          "order": 21
+        },
+        "aiMessage.commit.language": {
+          "type": "string",
+          "enum": [
+            "简体中文",
+            "繁體中文",
+            "English",
+            "日本語",
+            "한국어"
+          ],
+          "default": "简体中文",
+          "description": "提交信息的语言",
+          "order": 22
+        },
+        "aiMessage.streaming.forceOutputChannel": {
+          "type": "boolean",
+          "default": false,
+          "description": "强制使用输出面板显示流式生成内容（调试或SVN输入框无法写入时可开启）",
+          "order": 23
+        },
+        "aiMessage.debug.enableStreamingLog": {
+          "type": "boolean",
+          "default": false,
+          "description": "启用详细的流式调试日志（包含fragment次数、长度、fallback情况）",
+          "order": 24
         }
       }
     }

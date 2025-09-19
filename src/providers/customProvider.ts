@@ -4,27 +4,25 @@ import { BaseProvider } from './baseProvider';
 
 export class CustomProvider extends BaseProvider {
     readonly name = '自定义API';
-    private config: AIConfig;
 
     constructor(config: AIConfig) {
-        super();
-        this.config = config;
+        super(config);
     }
 
     async isAvailable(): Promise<boolean> {
-        return !!(this.config.customEndpoint && this.config.customApiKey);
+        return !!(this.config?.customEndpoint && this.config?.customApiKey);
     }
 
     async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {
-        if (!this.config.customEndpoint) {
+        if (!this.config?.customEndpoint) {
             throw new Error('请配置自定义API接口地址');
         }
 
-        if (!this.config.customApiKey) {
+        if (!this.config?.customApiKey) {
             throw new Error('请配置自定义API Key');
         }
 
-        const model = this.config.customModel || 'gpt-3.5-turbo';
+        const model = this.config?.customModel || 'gpt-3.5-turbo';
         const prompt = this.buildBasePrompt(diff, changedFiles);
         
         try {
@@ -45,7 +43,7 @@ export class CustomProvider extends BaseProvider {
                     temperature: 0.3,
                     max_tokens: 2000
                 })
-            }, this.config.timeout || 30000);
+            }, this.config?.timeout || 30000);
 
             if (!response.ok) {
                 const errorData = await response.text();
@@ -63,7 +61,6 @@ export class CustomProvider extends BaseProvider {
                     message?: string;
                     type?: string;
                 };
-                // 兼容不同的API格式
                 result?: string;
                 response?: string;
             };
@@ -72,7 +69,6 @@ export class CustomProvider extends BaseProvider {
                 throw new Error(`自定义API错误: ${data.error.message || data.error.type || '未知错误'}`);
             }
 
-            // 尝试多种响应格式
             let content = '';
             if (data.choices?.[0]?.message?.content) {
                 content = data.choices[0].message.content;

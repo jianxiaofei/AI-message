@@ -11,7 +11,7 @@ export class AIService {
             // 尝试获取 Copilot 模型
             const models = await vscode.lm.selectChatModels({ 
                 vendor: 'copilot',
-                family: 'gpt-4o' // 优先使用 GPT-4o
+                family: 'gpt-4.1' // 优先使用 GPT-4.1
             });
 
             // 如果没有 GPT-4o，尝试其他模型
@@ -39,7 +39,18 @@ export class AIService {
                 result += fragment;
             }
 
-            return this.extractCommitMessage(result.trim());
+            console.log('🤖 [AI-Message] AI原始输出:');
+            console.log('=====================================');
+            console.log(result.trim());
+            console.log('=====================================');
+
+            const extracted = this.extractCommitMessage(result.trim());
+            console.log('🔧 [AI-Message] 提取后的结果:');
+            console.log('-------------------------------------');
+            console.log(extracted);
+            console.log('-------------------------------------');
+
+            return extracted;
 
         } catch (error) {
             console.error('Copilot API生成失败:', error);
@@ -230,6 +241,9 @@ ${diff}
     }
 
     private extractCommitMessage(response: string): string {
+        console.log('🔍 [AI-Message] 开始提取提交信息');
+        console.log('原始响应长度:', response.length);
+        
         // 清理响应，移除多余的空白和引号
         let cleaned = response.trim().replace(/^["']|["']$/g, '');
         
@@ -240,25 +254,50 @@ ${diff}
         // 移除其他常见的格式标记
         cleaned = cleaned.replace(/^`/, '').replace(/`$/, '');
         
+        console.log('🧹 [AI-Message] 清理markdown后:');
+        console.log(cleaned);
+        
         // 按行分割并过滤
         const lines = cleaned.split('\n').map(line => line.trim()).filter(line => line);
+        console.log('📋 [AI-Message] 分割后的行数:', lines.length);
+        console.log('各行内容:', lines);
         
-        // 移除解释性文本和标题
+        // 移除解释性文本和标题，但保留以'-'开头的body内容
         const filteredLines = lines.filter(line => {
             const lower = line.toLowerCase();
-            return !lower.includes('提交信息') && 
-                   !lower.includes('生成') &&
-                   !lower.includes('基于') &&
-                   !lower.includes('分析') &&
-                   !lower.includes('示例') &&
-                   !lower.includes('example') &&
-                   !lower.includes('输出') &&
-                   !line.startsWith('#') &&
-                   !line.startsWith('**') &&
-                   !line.startsWith('*');
+            
+            // 保留以'-'开头的行（这可能是body内容）
+            if (line.startsWith('-')) {
+                console.log('✅ 保留body行:', line);
+                return true;
+            }
+            
+            // 过滤掉解释性文本和标题
+            const shouldFilter = lower.includes('提交信息') || 
+                   lower.includes('生成') ||
+                   lower.includes('基于') ||
+                   lower.includes('分析') ||
+                   lower.includes('示例') ||
+                   lower.includes('example') ||
+                   lower.includes('输出') ||
+                   line.startsWith('#') ||
+                   line.startsWith('**') ||
+                   line.startsWith('*');
+                   
+            if (shouldFilter) {
+                console.log('❌ 过滤掉:', line);
+            } else {
+                console.log('✅ 保留:', line);
+            }
+            
+            return !shouldFilter;
         });
         
+        console.log('🎯 [AI-Message] 过滤后的行数:', filteredLines.length);
+        console.log('过滤后内容:', filteredLines);
+        
         if (filteredLines.length === 0) {
+            console.log('⚠️ [AI-Message] 没有有效内容，使用默认提交信息');
             return '✨ feat: 更新代码';
         }
         
@@ -267,26 +306,44 @@ ${diff}
         
         for (let i = 0; i < filteredLines.length; i++) {
             const line = filteredLines[i];
+            console.log(`🔄 [AI-Message] 处理第${i+1}行: "${line}"`);
             
             if (line.includes(':') && this.getCommitType(line)) {
                 // 提交格式行，添加emoji
-                processedLines.push(this.addEmojiToCommitLine(line));
+                const processed = this.addEmojiToCommitLine(line);
+                console.log(`📝 识别为提交行: "${processed}"`);
+                processedLines.push(processed);
             } else if (line.startsWith('-') || line.startsWith('•') || line.startsWith('*')) {
                 // 主体内容（项目符号）
-                processedLines.push(line.replace(/^[-•*]\s*/, '- '));
+                const processed = line.replace(/^[-•*]\s*/, '- ');
+                console.log(`📄 识别为body行: "${processed}"`);
+                processedLines.push(processed);
             } else if (line.trim() && !this.isDescriptiveSummary(line)) {
                 // 其他内容（排除总结性描述）
+                console.log(`📋 识别为其他内容: "${line}"`);
                 processedLines.push(line);
+            } else {
+                console.log(`🚫 跳过总结性描述: "${line}"`);
             }
         }
         
+        console.log('📋 [AI-Message] 最终处理的行数:', processedLines.length);
+        console.log('最终内容:', processedLines);
+        
         // 如果没有有效的提交行，创建默认的
         if (processedLines.length === 0 || !processedLines.some(line => line.includes(':'))) {
+            console.log('⚠️ [AI-Message] 没有有效的提交行，使用默认');
             return '✨ feat: 更新代码';
         }
         
         // 使用单行换行
-        return processedLines.join('\n').trim();
+        const finalResult = processedLines.join('\n').trim();
+        console.log('🎉 [AI-Message] 最终提取结果:');
+        console.log('=====================================');
+        console.log(finalResult);
+        console.log('=====================================');
+        
+        return finalResult;
     }
     
     // 识别总结性描述行（应该被过滤掉）

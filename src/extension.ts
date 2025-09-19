@@ -38,69 +38,58 @@ function registerCommands(context: vscode.ExtensionContext) {
 
 async function handleGenerateCommitMessage() {
     try {
-        await vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: "生成提交信息",
-            cancellable: false
-        }, async (progress) => {
-            progress.report({ increment: 0, message: "检查版本控制仓库..." });
-            
-            const vcs = await validateVcsRepository();
-            if (!vcs) {
-                return;
-            }
-            
-            progress.report({ increment: 30, message: "获取变更信息..." });
-            
-            const changes = await getVcsChanges();
-            if (!changes) {
-                return;
-            }
-            
-            progress.report({ increment: 60, message: "生成提交信息..." });
-            
-            // 先设置Loading状态到输入框
-            const success = await setScmInputBoxValue("🤖 AI正在生成提交信息...");
-            if (success) {
-                progress.report({ increment: 70, message: "正在流式生成..." });
-                
-                // 实时生成并更新提交信息
-                await generateCommitMessageStreaming(changes, progress);
-                
-                progress.report({ increment: 100, message: "完成！" });
-                vscode.window.showInformationMessage('✅ 提交信息已生成并实时显示在输入框中！');
-            } else {
-                // 回退到一次性生成
-                const commitMessage = await generateCommitMessage(changes);
-                if (!commitMessage) {
-                    return;
-                }
-                
-                progress.report({ increment: 90, message: "设置提交信息..." });
-                console.log('正在尝试设置SCM输入框...');
-                const fallbackSuccess = await setScmInputBoxValue(commitMessage);
-                console.log('SCM输入框设置结果:', fallbackSuccess);
-                
-                if (fallbackSuccess) {
-                    progress.report({ increment: 100, message: "提交信息已设置到输入框！" });
-                    vscode.window.showInformationMessage(
-                        '✅ 提交信息已生成并填充到Source Control输入框！',
-                        '查看信息'
-                    ).then(action => {
-                        if (action === '查看信息') {
-                            showCommitMessagePreview(commitMessage);
-                        }
-                    });
-                } else {
-                    progress.report({ increment: 100, message: "已复制到剪贴板" });
-                    console.log('设置SCM输入框失败，回退到剪贴板方式');
-                    await handleCommitMessageGenerated(commitMessage);
-                }
-            }
-        });
+        await unifiedGenerateCommit();
     } catch (error) {
         await handleError('生成提交信息时发生错误', error);
     }
+}
+
+// 统一的提交信息生成流程（带流式 & 回退 & 格式化）
+async function unifiedGenerateCommit() {
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: '生成提交信息',
+        cancellable: false
+    }, async (progress) => {
+        progress.report({ increment: 0, message: '检查仓库...' });
+        const vcs = await validateVcsRepository();
+        if (!vcs) return;
+
+        progress.report({ increment: 20, message: '收集变更...' });
+        const changes = await getVcsChanges();
+        if (!changes) return;
+
+        // 获取待提交文件列表（排除ignore）
+        const status = await vcsService!.getCommitReadyChanges();
+        const changedFiles = status.changedFiles;
+        const vcsType = status.vcsType;
+
+        progress.report({ increment: 40, message: '准备流式...' });
+        const initMsg = '🤖 正在分析 ' + changedFiles.length + ' 个文件变更...';
+        const scmWritable = await setScmInputBoxValue(initMsg);
+        const debug = vscode.workspace.getConfiguration('aiMessage').get<boolean>('debug.enableStreamingLog', false);
+        if (!scmWritable && debug) {
+            console.log('[AI-Message] SCM输入框不可写，将使用输出通道');
+        }
+
+        progress.report({ increment: 55, message: '模型流式生成中...' });
+        // 重用已有流式函数：需要一个封装新增参数（此处直接调用现有 generateWithCopilotStreaming）
+        try {
+            await generateWithCopilotStreaming(changes, changedFiles, progress, { fallbackToOutput: !scmWritable });
+            progress.report({ increment: 100, message: '完成' });
+            vscode.window.showInformationMessage('✅ 提交信息已生成');
+        } catch (e) {
+            if (debug) console.error('[AI-Message] 流式生成失败，尝试普通生成', e);
+            const msg = await aiService.generateCommitMessage(changes, changedFiles);
+            if (msg) {
+                const formatted = enforceConventionalCommit(extractCommitMessage(msg), changedFiles);
+                await setScmInputBoxValue(formatted) || vscode.env.clipboard.writeText(formatted);
+                vscode.window.showInformationMessage('⚠️ 已使用非流式方式生成提交信息');
+            } else {
+                vscode.window.showErrorMessage('无法生成提交信息');
+            }
+        }
+    });
 }
 
 async function handleQuickCommit() {
@@ -192,49 +181,344 @@ async function getVcsChanges(): Promise<string | null> {
 /**
  * 流式生成提交信息并实时更新到SCM输入框
  */
-async function generateCommitMessageStreaming(changes: string, progress: vscode.Progress<{ increment?: number; message?: string }>): Promise<void> {
+const outputChannel = vscode.window.createOutputChannel('AI Commit Stream');
+
+interface StreamOptions {
+    fallbackToOutput?: boolean;
+}
+
+// generateCommitMessageStreaming 已被 unifiedGenerateCommit + generateWithCopilotStreaming 取代
+
+/**
+ * 使用Copilot流式生成提交信息
+ */
+async function generateWithCopilotStreaming(
+    changes: string,
+    changedFiles: any[],
+    progress: vscode.Progress<{ increment?: number; message?: string }>,
+    options: StreamOptions = {}
+): Promise<void> {
     try {
-        if (!vcsService) {
-            throw new Error('版本控制服务未初始化');
+        // 获取 Copilot 模型
+        const models = await vscode.lm.selectChatModels({ 
+            vendor: 'copilot',
+            family: 'gpt-4o' 
+        });
+
+        let model = models[0];
+        if (!model) {
+            const fallbackModels = await vscode.lm.selectChatModels({ 
+                vendor: 'copilot' 
+            });
+            model = fallbackModels[0];
         }
-        
-        // 获取变更文件列表
-        const status = await vcsService.getCommitReadyChanges();
-        
-        // 分阶段生成，直接显示有用的信息，去掉套话
-        const stages = [
-            { 
-                message: "📝 正在构建提交信息结构...\n\n分析文件类型和变更模式\n生成规范的提交格式", 
-                progress: 80 
-            },
-            { 
-                message: "✨ 正在优化提交信息内容...\n\n完善描述信息\n确保符合最佳实践\n即将完成...", 
-                progress: 90 
-            }
+
+        if (!model) {
+            throw new Error('没有可用的 Copilot 模型');
+        }
+
+        // 构建提示信息
+    const vcsType = vcsService?.getVcsType?.() || 'git';
+    const prompt = buildCopilotPrompt(changes, changedFiles, vcsType);
+        const messages = [
+            vscode.LanguageModelChatMessage.User(prompt)
         ];
-        
-        for (const stage of stages) {
-            await setScmInputBoxValue(stage.message);
-            progress.report({ increment: stage.progress, message: stage.message.split('\n')[0].replace(/🤖|📝|✨/g, '') });
-            await new Promise(resolve => setTimeout(resolve, 1000)); // 增加到1秒让用户能看清
+
+        // 开始流式请求
+        const response = await model.sendRequest(messages, {}, new vscode.CancellationTokenSource().token);
+        const debug = vscode.workspace.getConfiguration('aiMessage').get<boolean>('debug.enableStreamingLog', false);
+        if (debug) {
+            console.log('[AI-Message][Stream] 启动流式，会话模型:', model.id);
         }
+
+        let result = '';
+        let lastUpdateTime = Date.now();
+        const updateInterval = 200; // 每200ms更新一次界面
+        let fragmentCount = 0;
+        let firstChunkTime: number | null = null;
+        const startTime = Date.now();
         
-        // 实际生成提交信息
-        const message = await aiService.generateCommitMessage(changes, status.changedFiles);
-        
-        if (!message || message.trim().length === 0) {
-            const errorMsg = "❌ 提交信息生成失败\n\n请检查：\n• GitHub Copilot 是否已安装\n• 是否已正确登录\n• 网络连接是否正常";
-            await setScmInputBoxValue(errorMsg);
-            throw new Error('无法生成提交信息，请检查GitHub Copilot是否已安装并登录');
+        for await (const fragment of response.text) {
+            fragmentCount++;
+            if (firstChunkTime === null) firstChunkTime = Date.now();
+            result += fragment;
+            if (debug) {
+                console.log(`[AI-Message][Stream] 片段#${fragmentCount} 长度=${fragment.length} 累计=${result.length}`);
+            }
+            
+            // 定期更新输入框，避免过于频繁的UI更新
+            const now = Date.now();
+            if (now - lastUpdateTime > updateInterval) {
+                const displayText = result.length > 10 ? 
+                    `🤖 AI正在生成...\n\n${result}${result.endsWith('\n') ? '' : '...'}`
+                    : "🤖 AI正在思考...";
+                    
+                const ok = await setScmInputBoxValue(displayText);
+                if (debug && !ok && !options.fallbackToOutput) {
+                    console.log('[AI-Message][Stream] SCM写入失败但未启用fallbackToOutput');
+                }
+                if (!ok && options.fallbackToOutput) {
+                    outputChannel.show(true);
+                    outputChannel.replace ? outputChannel.replace(displayText) : (function(){
+                        // 没有replace方法时简单清屏再写
+                        outputChannel.clear();
+                        outputChannel.append(displayText);
+                    })();
+                    if (debug) {
+                        console.log('[AI-Message][Stream] 已写入OutputChannel (fallback)');
+                    }
+                }
+                lastUpdateTime = now;
+                
+                // 更新进度
+                const progressIncrement = Math.min(85 + (result.length / 10), 95);
+                progress.report({ increment: progressIncrement, message: "实时生成中..." });
+            }
         }
-        
-        // 最终设置完整的提交信息
-        await setScmInputBoxValue(message.trim());
+
+        // 最终处理和设置完整结果
+        if (result.trim()) {
+            // 提取提交信息（去掉可能的前缀和格式）
+            const cleanMessage = extractCommitMessage(result.trim());
+            if (debug) {
+                const totalMs = Date.now() - startTime;
+                const ttfb = firstChunkTime ? (firstChunkTime - startTime) : -1;
+                console.log(`[AI-Message][Stream] 完成，总片段=${fragmentCount}, 总长度=${result.length}, 首字节(ms)=${ttfb}, 总耗时(ms)=${totalMs}`);
+            }
+            const formatted = enforceConventionalCommit(cleanMessage, changedFiles);
+            const finalOk = await setScmInputBoxValue(formatted);
+            if (!finalOk && options.fallbackToOutput) {
+                outputChannel.show(true);
+                outputChannel.appendLine('\n=== 最终提交信息 ===');
+                outputChannel.appendLine(formatted);
+                if (debug) {
+                    console.log('[AI-Message][Stream] 最终结果写入OutputChannel');
+                }
+            }
+            progress.report({ increment: 100, message: "完成！" });
+        } else {
+            throw new Error('生成的内容为空');
+        }
         
     } catch (error) {
-        await setScmInputBoxValue("❌ 生成失败，请重试\n\n如果问题持续出现，请检查扩展设置");
-        throw error;
+        console.error('Copilot流式生成失败:', error);
+        // 回退到普通生成
+        const message = await aiService.generateCommitMessage(changes, changedFiles);
+        if (message && message.trim().length > 0) {
+            await setScmInputBoxValue(message.trim());
+        } else {
+            throw error;
+        }
     }
+}
+
+/**
+ * 构建Copilot提示信息
+ */
+function buildCopilotPrompt(diff: string, changedFiles: any[], vcsType: string): string {
+    const config = vscode.workspace.getConfiguration('aiMessage');
+    // 统一使用 commit.* 新键名；兼容旧键名（如果用户还未升级 settings）
+    const enableEmoji = config.get('commit.enableEmoji', config.get('commitFormat.enableEmoji', true));
+    const enableBody = config.get('commit.enableBody', config.get('commitFormat.enableBody', true));
+    const enableScope = config.get('commit.enableScope', config.get('commitFormat.enableScope', true));
+    const language = config.get('commit.language', config.get('commitFormat.language', 'zh-CN'));
+
+    // 语言归一化：支持多种中文表示方式
+    function normalizeLanguage(lang: string | undefined): string {
+        if (!lang) return 'en';
+        const l = lang.toLowerCase();
+        // 常见中文写法映射
+        if (['zh', 'zh-cn', 'zh_cn', 'zh-hans', '简体中文', 'chinese', '中文', 'cn'].includes(l)) return 'zh-cn';
+        if (['zh-tw', 'zh_tw', '繁體中文', '繁体中文', 'traditional chinese'].includes(l)) return 'zh-tw';
+        if (['en', 'english'].includes(l)) return 'en';
+        if (['ja', 'jp', '日本語'].includes(l)) return 'ja';
+        if (['ko', 'kr', '한국어'].includes(l)) return 'ko';
+        return l;
+    }
+    const normLang = normalizeLanguage(language as string);
+    const isZhCN = normLang === 'zh-cn';
+    
+    let prompt = isZhCN ? 
+        `你是一个专业的代码提交信息生成专家。请根据以下代码变更生成一条符合 Conventional Commits 规范的提交信息。
+
+**核心要求:**
+1. 使用标准的 \`<type>(<scope>): <subject>\` 格式
+2. type必须是: feat, fix, docs, style, refactor, test, chore, build, ci, perf 之一
+3. subject必须简洁明了，不超过50个字符
+4. 必须用中文描述` :
+        `You are a professional commit message generator. Please generate a commit message that follows the Conventional Commits specification based on the following code changes.
+
+**Core Requirements:**
+1. Use the standard \`<type>(<scope>): <subject>\` format
+2. type must be one of: feat, fix, docs, style, refactor, test, chore, build, ci, perf
+3. subject must be concise and clear, within 50 characters
+4. Use English for description`;
+
+    if (enableEmoji) {
+        prompt += isZhCN ? '\n5. 在type前添加合适的emoji图标' : '\n5. Add appropriate emoji icon before type';
+    }
+    
+    if (enableScope && changedFiles.length > 0) {
+        const scopes = changedFiles.map(f => f.path?.split('/')[0] || 'root').slice(0, 3);
+        prompt += isZhCN ? 
+            `\n6. scope从这些路径中选择: ${scopes.join(', ')}` :
+            `\n6. Choose scope from these paths: ${scopes.join(', ')}`;
+    }
+
+    if (enableBody) {
+        prompt += isZhCN ? 
+            '\n7. **必须包含正文部分**：在标题行后空一行，添加详细说明变更内容和原因，使用项目符号列表格式' :
+            '\n7. **Must include body section**: Add blank line after subject, then detailed explanation of what changed and why, using bullet point format';
+    }
+
+    // 增强上下文：提供文件统计与VCS类型
+    const added = changedFiles.filter(f => f.status === 'A').length;
+    const modified = changedFiles.filter(f => f.status === 'M').length;
+    const deleted = changedFiles.filter(f => f.status === 'D' || f.status === '!').length;
+    const renamed = changedFiles.filter(f => f.status === 'R').length;
+    const statsLine = isZhCN ? `文件统计: 新增 ${added} 修改 ${modified} 删除 ${deleted} 重命名 ${renamed} (VCS: ${vcsType})` : `File stats: added ${added} modified ${modified} deleted ${deleted} renamed ${renamed} (VCS: ${vcsType})`;
+
+    prompt += isZhCN ? 
+        `\n\n${statsLine}\n\n**代码变更:**\n` + diff :
+        `\n\n${statsLine}\n\n**Code Changes:**\n` + diff;
+
+    prompt += isZhCN ? 
+        '\n\n请直接输出最终的提交信息，不要添加任何解释或前缀。' :
+        '\n\nPlease output the final commit message directly without any explanation or prefix.';
+
+    // 添加示例格式（当启用body时）
+    if (enableBody) {
+        const exampleTitle = isZhCN ? '**格式示例:**' : '**Format Example:**';
+        const example = isZhCN ? 
+            `${exampleTitle}
+feat(auth): 实现用户JWT认证功能
+
+- 新增JWT token生成和验证逻辑
+- 集成用户登录状态管理
+- 添加token过期时间配置
+- 更新API安全中间件` :
+            `${exampleTitle}
+feat(auth): implement JWT authentication system
+
+- Add JWT token generation and validation logic  
+- Integrate user session management
+- Add configurable token expiration
+- Update API security middleware`;
+        
+        prompt += '\n\n' + example;
+    }
+
+    return prompt;
+}
+
+/**
+ * 从生成的内容中提取清洁的提交信息
+ */
+function extractCommitMessage(content: string): string {
+    // 移除可能的markdown格式
+    content = content.replace(/```[\s\S]*?```/g, '');
+    content = content.replace(/`([^`]+)`/g, '$1');
+    
+    // 移除可能的前缀
+    content = content.replace(/^(提交信息[:：]?\s*|commit message[:：]?\s*)/i, '');
+    
+    // 清理多余的空行
+    content = content.replace(/\n\s*\n\s*\n/g, '\n\n');
+    
+    return content.trim();
+}
+
+// 规范化提交信息，强制符合 Conventional Commits 基础格式
+function enforceConventionalCommit(raw: string, changedFiles?: any[]): string {
+    const config = vscode.workspace.getConfiguration('aiMessage');
+    const enableEmoji = config.get('commit.enableEmoji', config.get('commitFormat.enableEmoji', true));
+    const enableBody = config.get('commit.enableBody', config.get('commitFormat.enableBody', true));
+    const language = config.get('commit.language', config.get('commitFormat.language', 'zh-CN'));
+    
+    // 语言归一化
+    function normalizeLanguage(lang: string | undefined): string {
+        if (!lang) return 'en';
+        const l = lang.toLowerCase();
+        if (['zh', 'zh-cn', 'zh_cn', 'zh-hans', '简体中文', 'chinese', '中文', 'cn'].includes(l)) return 'zh-cn';
+        return 'en';
+    }
+    const isZh = normalizeLanguage(language as string) === 'zh-cn';
+
+    const typeMap: Record<string,string> = {
+        feat: 'feat', feature: 'feat', 新功能: 'feat', 功能: 'feat',
+        fix: 'fix', bug: 'fix', 修复: 'fix', 修正: 'fix',
+        docs: 'docs', 文档: 'docs',
+        style: 'style', 样式: 'style', 格式: 'style',
+        refactor: 'refactor', 重构: 'refactor', 优化: 'refactor',
+        test: 'test', 测试: 'test',
+        chore: 'chore', 杂务: 'chore', 其他: 'chore',
+        build: 'build', ci: 'ci', perf: 'perf'
+    };
+
+    const emojiMap: Record<string,string> = {
+        feat: '✨', fix: '🐛', docs: '📝', style: '🎨', refactor: '♻️', test: '✅', chore: '🔧', build: '🏗️', ci: '⚙️', perf: '⚡'
+    };
+
+    const lines = raw.split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length === 0) return raw;
+    let header = lines[0];
+    let body = lines.slice(1).join('\n');
+
+    // 尝试解析已有格式
+    let type = 'chore';
+    let scope: string | undefined;
+    let subject = header.trim();
+
+    const headerMatch = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic})?\s*([a-zA-Z\u4e00-\u9fa5]+)(?:\(([^)]+)\))?:\s*(.+)$/u.exec(header);
+    if (headerMatch) {
+        const maybeType = headerMatch[2].toLowerCase();
+        const mapped = typeMap[maybeType];
+        if (mapped) type = mapped;
+        if (headerMatch[3]) scope = headerMatch[3].trim();
+        subject = headerMatch[4].trim();
+    } else {
+        // 没有匹配格式，从subject中推断type
+        for (const k of Object.keys(typeMap)) {
+            if (subject.startsWith(k) || subject.includes(k)) { type = typeMap[k]; break; }
+        }
+    }
+
+    // 限制subject长度
+    if (subject.length > 50) subject = subject.slice(0, 47).trim() + '...';
+
+    const emoji = enableEmoji ? (emojiMap[type] || '') : '';
+    const finalHeader = `${emoji ? emoji + ' ' : ''}${type}${scope ? '(' + scope + ')' : ''}: ${subject}`.trim();
+
+    // 处理或生成body
+    if (enableBody) {
+        if (!body || body.trim().length === 0) {
+            // 如果没有body，根据文件信息自动生成简单的body
+            if (changedFiles && changedFiles.length > 0) {
+                const filesByType = changedFiles.reduce((acc: any, file: any) => {
+                    const status = file.status || 'M';
+                    if (!acc[status]) acc[status] = [];
+                    acc[status].push(file.path || file);
+                    return acc;
+                }, {});
+                
+                const bodyLines: string[] = [];
+                if (filesByType['A']) bodyLines.push(isZh ? `- 新增文件: ${filesByType['A'].slice(0,3).join(', ')}` : `- Add files: ${filesByType['A'].slice(0,3).join(', ')}`);
+                if (filesByType['M']) bodyLines.push(isZh ? `- 修改文件: ${filesByType['M'].slice(0,3).join(', ')}` : `- Modify files: ${filesByType['M'].slice(0,3).join(', ')}`);
+                if (filesByType['D']) bodyLines.push(isZh ? `- 删除文件: ${filesByType['D'].slice(0,3).join(', ')}` : `- Delete files: ${filesByType['D'].slice(0,3).join(', ')}`);
+                
+                if (bodyLines.length > 0) {
+                    body = bodyLines.join('\n');
+                }
+            }
+        } else {
+            body = body
+                .replace(/^#+\s*/gm, '')
+                .replace(/^[*-]\s*/gm, '- ')
+                .trim();
+        }
+    }
+
+    return (enableBody && body) ? `${finalHeader}\n\n${body}` : finalHeader;
 }
 
 async function generateCommitMessage(changes: string): Promise<string | null> {
@@ -316,7 +600,7 @@ async function setScmInputBoxValue(message: string): Promise<boolean> {
                 const repo = git.repositories[0];
                 if (repo.inputBox) {
                     repo.inputBox.value = message;
-                    console.log('通过Git API成功设置提交信息:', message.substring(0, 50) + '...');
+                    console.log('通过Git API成功设置提交信息');
                     
                     // 尝试聚焦到SCM面板以确保可见性
                     try {
@@ -356,27 +640,27 @@ async function setScmInputBoxValue(message: string): Promise<boolean> {
             }
         }
 
-        // 方法3：尝试通过命令和剪贴板的组合方式
+        // 方法3：尝试通用SCM API
         try {
-            await vscode.env.clipboard.writeText(message);
-            await vscode.commands.executeCommand('workbench.scm.focus');
-            
-            // 尝试模拟粘贴操作（在某些情况下可能工作）
-            setTimeout(async () => {
+            const scm = vscode.scm;
+            if (scm && scm.inputBox) {
+                scm.inputBox.value = message;
+                console.log('通过通用SCM API成功设置提交信息');
+                
+                // 聚焦到SCM面板
                 try {
-                    await vscode.commands.executeCommand('editor.action.selectAll');
-                    await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
-                } catch (pasteError) {
-                    console.log('模拟粘贴失败:', pasteError);
+                    await vscode.commands.executeCommand('workbench.scm.focus');
+                } catch (focusError) {
+                    console.log('聚焦SCM面板失败:', focusError);
                 }
-            }, 100);
-            
-            console.log('使用剪贴板+焦点方式设置提交信息');
-            return true;
-        } catch (commandError) {
-            console.log('命令执行失败:', commandError);
+                
+                return true;
+            }
+        } catch (genericError) {
+            console.log('通用SCM API调用失败:', genericError);
         }
-        
+
+        console.log('未能通过API直接设置SCM提交信息');
         return false;
     } catch (error) {
         console.log('设置SCM输入框失败:', error);

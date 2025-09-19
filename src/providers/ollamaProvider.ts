@@ -4,16 +4,14 @@ import { BaseProvider } from './baseProvider';
 
 export class OllamaProvider extends BaseProvider {
     readonly name = 'Ollama';
-    private config: AIConfig;
 
     constructor(config: AIConfig) {
-        super();
-        this.config = config;
+        super(config);
     }
 
     async isAvailable(): Promise<boolean> {
         try {
-            const endpoint = this.config.ollamaEndpoint || 'http://localhost:11434';
+            const endpoint = this.config?.ollamaEndpoint || 'http://localhost:11434';
             const response = await this.fetchWithTimeout(`${endpoint}/api/tags`, {
                 method: 'GET',
             }, 5000);
@@ -25,8 +23,8 @@ export class OllamaProvider extends BaseProvider {
     }
 
     async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {
-        const endpoint = this.config.ollamaEndpoint || 'http://localhost:11434';
-        const model = this.config.ollamaModel || 'qwen2.5:7b';
+        const endpoint = this.config?.ollamaEndpoint || 'http://localhost:11434';
+        const model = this.config?.ollamaModel || 'qwen2.5:7b';
         
         const prompt = this.buildBasePrompt(diff, changedFiles);
         
@@ -46,7 +44,7 @@ export class OllamaProvider extends BaseProvider {
                         top_k: 40
                     }
                 })
-            }, this.config.timeout || 30000);
+            }, this.config?.timeout || 30000);
 
             if (!response.ok) {
                 throw new Error(`Ollama API错误: ${response.status} ${response.statusText}`);

@@ -79,6 +79,12 @@ export class AIProviderFactory {
             provider: config.get('ai.provider', 'copilot') as any,
             timeout: config.get('ai.timeout', 30000),
             
+            // 提交信息格式配置
+            enableEmoji: config.get('commit.enableEmoji', true),
+            enableBody: config.get('commit.enableBody', true),
+            enableScope: config.get('commit.enableScope', true),
+            language: config.get('commit.language', '简体中文'),
+            
             // Ollama配置
             ollamaEndpoint: config.get('ai.ollamaEndpoint', 'http://localhost:11434'),
             ollamaModel: config.get('ai.ollamaModel', 'qwen2.5:7b'),
@@ -128,6 +134,10 @@ export class AIService {
             console.error('创建AI提供商失败:', error);
             this.provider = null;
         }
+    }
+
+    getCurrentProvider(): AIProvider | null {
+        return this.provider;
     }
 
     async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {

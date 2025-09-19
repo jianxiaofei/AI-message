@@ -10,6 +10,12 @@ export interface AIConfig {
     provider: 'copilot' | 'ollama' | 'qianwen' | 'wenxin' | 'zhipu' | 'custom';
     timeout: number;
     
+    // 提交信息格式配置
+    enableEmoji?: boolean;
+    enableBody?: boolean;
+    enableScope?: boolean;
+    language?: string;
+    
     // Ollama配置
     ollamaEndpoint?: string;
     ollamaModel?: string;

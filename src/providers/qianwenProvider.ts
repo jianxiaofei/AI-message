@@ -4,23 +4,21 @@ import { BaseProvider } from './baseProvider';
 
 export class QianwenProvider extends BaseProvider {
     readonly name = '通义千问';
-    private config: AIConfig;
 
     constructor(config: AIConfig) {
-        super();
-        this.config = config;
+        super(config);
     }
 
     async isAvailable(): Promise<boolean> {
-        return !!this.config.qianwenApiKey;
+        return !!this.config?.qianwenApiKey;
     }
 
     async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {
-        if (!this.config.qianwenApiKey) {
+        if (!this.config?.qianwenApiKey) {
             throw new Error('请配置通义千问API Key');
         }
 
-        const model = this.config.qianwenModel || 'qwen-plus';
+        const model = this.config?.qianwenModel || 'qwen-plus';
         const prompt = this.buildBasePrompt(diff, changedFiles);
         
         try {
@@ -28,7 +26,7 @@ export class QianwenProvider extends BaseProvider {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.config.qianwenApiKey}`,
+                    'Authorization': `Bearer ${this.config?.qianwenApiKey}`,
                 },
                 body: JSON.stringify({
                     model: model,
@@ -46,7 +44,7 @@ export class QianwenProvider extends BaseProvider {
                         max_tokens: 2000
                     }
                 })
-            }, this.config.timeout || 30000);
+            }, this.config?.timeout || 30000);
 
             if (!response.ok) {
                 const errorData = await response.text();

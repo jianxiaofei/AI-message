@@ -4,27 +4,25 @@ import { BaseProvider } from './baseProvider';
 
 export class WenxinProvider extends BaseProvider {
     readonly name = '文心一言';
-    private config: AIConfig;
     private accessToken: string | null = null;
     private tokenExpireTime: number = 0;
 
     constructor(config: AIConfig) {
-        super();
-        this.config = config;
+        super(config);
     }
 
     async isAvailable(): Promise<boolean> {
-        return !!(this.config.wenxinApiKey && this.config.wenxinSecretKey);
+        return !!(this.config?.wenxinApiKey && this.config?.wenxinSecretKey);
     }
 
     async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {
-        if (!this.config.wenxinApiKey || !this.config.wenxinSecretKey) {
+        if (!this.config?.wenxinApiKey || !this.config?.wenxinSecretKey) {
             throw new Error('请配置文心一言API Key和Secret Key');
         }
 
         try {
             const accessToken = await this.getAccessToken();
-            const model = this.config.wenxinModel || 'ernie-3.5-8k';
+            const model = this.config?.wenxinModel || 'ernie-3.5-8k';
             const prompt = this.buildBasePrompt(diff, changedFiles);
             
             // 根据模型确定API端点
@@ -54,7 +52,7 @@ export class WenxinProvider extends BaseProvider {
                     top_p: 0.9,
                     penalty_score: 1.0
                 })
-            }, this.config.timeout || 30000);
+            }, this.config?.timeout || 30000);
 
             if (!response.ok) {
                 const errorData = await response.text();
@@ -89,7 +87,7 @@ export class WenxinProvider extends BaseProvider {
         }
 
         try {
-            const response = await this.fetchWithTimeout(`https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=${this.config.wenxinApiKey}&client_secret=${this.config.wenxinSecretKey}`, {
+            const response = await this.fetchWithTimeout(`https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=${this.config?.wenxinApiKey}&client_secret=${this.config?.wenxinSecretKey}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
