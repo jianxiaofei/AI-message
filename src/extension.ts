@@ -53,11 +53,11 @@ async function unifiedGenerateCommit() {
     }, async (progress) => {
         progress.report({ increment: 0, message: '检查仓库...' });
         const vcs = await validateVcsRepository();
-        if (!vcs) return;
+        if (!vcs) {return;}
 
         progress.report({ increment: 20, message: '收集变更...' });
         const changes = await getVcsChanges();
-        if (!changes) return;
+        if (!changes) {return;}
 
         // 获取待提交文件列表（排除ignore）
         const status = await vcsService!.getCommitReadyChanges();
@@ -79,7 +79,7 @@ async function unifiedGenerateCommit() {
             progress.report({ increment: 100, message: '完成' });
             vscode.window.showInformationMessage('✅ 提交信息已生成');
         } catch (e) {
-            if (debug) console.error('[AI-Message] 流式生成失败，尝试普通生成', e);
+            if (debug) {console.error('[AI-Message] 流式生成失败，尝试普通生成', e);}
             const msg = await aiService.generateCommitMessage(changes, changedFiles);
             if (msg) {
                 const formatted = enforceConventionalCommit(extractCommitMessage(msg), changedFiles, changes);
@@ -240,7 +240,7 @@ async function generateWithCopilotStreaming(
         
         for await (const fragment of response.text) {
             fragmentCount++;
-            if (firstChunkTime === null) firstChunkTime = Date.now();
+            if (firstChunkTime === null) {firstChunkTime = Date.now();}
             result += fragment;
             if (debug) {
                 console.log(`[AI-Message][Stream] 片段#${fragmentCount} 长度=${fragment.length} 累计=${result.length}`);
@@ -325,14 +325,14 @@ function buildCopilotPrompt(diff: string, changedFiles: any[], vcsType: string):
 
     // 语言归一化：支持多种中文表示方式
     function normalizeLanguage(lang: string | undefined): string {
-        if (!lang) return 'en';
+        if (!lang) {return 'en';}
         const l = lang.toLowerCase();
         // 常见中文写法映射
-        if (['zh', 'zh-cn', 'zh_cn', 'zh-hans', '简体中文', 'chinese', '中文', 'cn'].includes(l)) return 'zh-cn';
-        if (['zh-tw', 'zh_tw', '繁體中文', '繁体中文', 'traditional chinese'].includes(l)) return 'zh-tw';
-        if (['en', 'english'].includes(l)) return 'en';
-        if (['ja', 'jp', '日本語'].includes(l)) return 'ja';
-        if (['ko', 'kr', '한국어'].includes(l)) return 'ko';
+        if (['zh', 'zh-cn', 'zh_cn', 'zh-hans', '简体中文', 'chinese', '中文', 'cn'].includes(l)) {return 'zh-cn';}
+        if (['zh-tw', 'zh_tw', '繁體中文', '繁体中文', 'traditional chinese'].includes(l)) {return 'zh-tw';}
+        if (['en', 'english'].includes(l)) {return 'en';}
+        if (['ja', 'jp', '日本語'].includes(l)) {return 'ja';}
+        if (['ko', 'kr', '한국어'].includes(l)) {return 'ko';}
         return l;
     }
     const normLang = normalizeLanguage(language as string);
@@ -581,15 +581,15 @@ function analyzeFileChanges(changedFiles: any[]) {
 function generateBasicBody(changedFiles: any[], isZh: boolean = true): string {
     const filesByType = changedFiles.reduce((acc: any, file: any) => {
         const status = file.status || 'M';
-        if (!acc[status]) acc[status] = [];
+        if (!acc[status]) {acc[status] = [];}
         acc[status].push(file.path || file);
         return acc;
     }, {});
     
     const bodyLines: string[] = [];
-    if (filesByType['A']) bodyLines.push(isZh ? `- 新增文件: ${filesByType['A'].slice(0,3).join(', ')}` : `- Add files: ${filesByType['A'].slice(0,3).join(', ')}`);
-    if (filesByType['M']) bodyLines.push(isZh ? `- 修改文件: ${filesByType['M'].slice(0,3).join(', ')}` : `- Modify files: ${filesByType['M'].slice(0,3).join(', ')}`);
-    if (filesByType['D']) bodyLines.push(isZh ? `- 删除文件: ${filesByType['D'].slice(0,3).join(', ')}` : `- Delete files: ${filesByType['D'].slice(0,3).join(', ')}`);
+    if (filesByType['A']) {bodyLines.push(isZh ? `- 新增文件: ${filesByType['A'].slice(0,3).join(', ')}` : `- Add files: ${filesByType['A'].slice(0,3).join(', ')}`);}
+    if (filesByType['M']) {bodyLines.push(isZh ? `- 修改文件: ${filesByType['M'].slice(0,3).join(', ')}` : `- Modify files: ${filesByType['M'].slice(0,3).join(', ')}`);}
+    if (filesByType['D']) {bodyLines.push(isZh ? `- 删除文件: ${filesByType['D'].slice(0,3).join(', ')}` : `- Delete files: ${filesByType['D'].slice(0,3).join(', ')}`);}
     
     return bodyLines.join('\n');
 }
@@ -664,9 +664,9 @@ function enforceConventionalCommit(raw: string, changedFiles?: any[], diff?: str
     
     // 语言归一化
     function normalizeLanguage(lang: string | undefined): string {
-        if (!lang) return 'en';
+        if (!lang) {return 'en';}
         const l = lang.toLowerCase();
-        if (['zh', 'zh-cn', 'zh_cn', 'zh-hans', '简体中文', 'chinese', '中文', 'cn'].includes(l)) return 'zh-cn';
+        if (['zh', 'zh-cn', 'zh_cn', 'zh-hans', '简体中文', 'chinese', '中文', 'cn'].includes(l)) {return 'zh-cn';}
         return 'en';
     }
     const isZh = normalizeLanguage(language as string) === 'zh-cn';
@@ -687,7 +687,7 @@ function enforceConventionalCommit(raw: string, changedFiles?: any[], diff?: str
     };
 
     const lines = raw.split(/\r?\n/).filter(l => l.trim().length > 0);
-    if (lines.length === 0) return raw;
+    if (lines.length === 0) {return raw;}
     let header = lines[0];
     let body = lines.slice(1).join('\n');
 
@@ -700,8 +700,8 @@ function enforceConventionalCommit(raw: string, changedFiles?: any[], diff?: str
     if (headerMatch) {
         const maybeType = headerMatch[2].toLowerCase();
         const mapped = typeMap[maybeType];
-        if (mapped) type = mapped;
-        if (headerMatch[3]) scope = headerMatch[3].trim();
+        if (mapped) {type = mapped;}
+        if (headerMatch[3]) {scope = headerMatch[3].trim();}
         subject = headerMatch[4].trim();
     } else {
         // 没有匹配格式，从subject中推断type
@@ -711,7 +711,7 @@ function enforceConventionalCommit(raw: string, changedFiles?: any[], diff?: str
     }
 
     // 限制subject长度
-    if (subject.length > 50) subject = subject.slice(0, 47).trim() + '...';
+    if (subject.length > 50) {subject = subject.slice(0, 47).trim() + '...';}
 
     const emoji = enableEmoji ? (emojiMap[type] || '') : '';
     const finalHeader = `${emoji ? emoji + ' ' : ''}${type}${scope ? '(' + scope + ')' : ''}: ${subject}`.trim();

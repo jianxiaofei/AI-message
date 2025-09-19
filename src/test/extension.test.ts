@@ -13,6 +13,12 @@ suite('Extension Test Suite', () => {
 	});
 
 	test('Commands should be registered', async () => {
+		// Ensure the extension is activated before checking commands
+		const extension = vscode.extensions.getExtension('jianxiaofei.ai-message');
+		if (extension && !extension.isActive) {
+			await extension.activate();
+		}
+		
 		const commands = await vscode.commands.getCommands();
 		assert.ok(commands.includes('ai-message.generateCommitMessage'));
 		assert.ok(commands.includes('ai-message.quickCommit'));
