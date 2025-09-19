@@ -1,6 +1,42 @@
-# Change Log
+# 更新日志
 
-All notable changes to the "AI-message" extension will be documented in this file.
+AI-message 扩展的所有重要变更都将记录在这个文件中。
+
+格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
+并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+
+## [0.0.43] - 2025-09-19
+
+### ✨ 新增功能
+- 🤖 支持多种 AI 提供商：GitHub Copilot、Ollama、千问、文心一言、智谱AI
+- 🔧 灵活的 AI 提供商配置系统，支持自定义 API 端点
+- 📝 智能提交信息生成，支持常规提交和约定式提交格式
+- 🎯 完整的 Git 和 SVN 版本控制系统支持
+- ⚡ 智能后备方案：当 AI 服务不可用时自动使用基于规则的生成
+- 🔍 高级代码差异分析，识别函数变更、导入变更等
+- 📋 一键复制功能，方便快速使用生成的提交信息
+- ⌨️ 便捷的快捷键支持：`Ctrl+Alt+G` (生成)、`Ctrl+Alt+Q` (快速生成)
+
+### 🎛️ 配置选项
+- 可配置的 AI 提供商优先级
+- 自定义提交信息模板和格式
+- 智能 body 生成开关
+- 详细的调试日志控制
+- 质量检查和格式标准化选项
+
+### 🔧 技术特性
+- VS Code Language Model API 集成
+- 智能模型降级机制（GPT-4o → GPT-4 → GPT-3.5-turbo）
+- 流式响应支持，实时显示生成进度
+- 完善的错误处理和用户反馈
+- 多平台兼容性（Windows、macOS、Linux）
+
+### 🎨 用户体验
+- 友好的进度指示器
+- 右键菜单和 SCM 面板集成
+- 智能表情符号支持（✨🐛📝💄♻️⚡等）
+- 摘要行显示所有变更文件
+- ignore-on-commit 文件过滤功能
 
 ## [0.0.22] - 2025-01-17
 
@@ -18,6 +54,35 @@ All notable changes to the "AI-message" extension will be documented in this fil
 ### Fixed
 - SVN 仓库检测和状态获取优化
 - 文件差异分析改进
+
+## [未来版本计划] - 路线图
+
+### 🚀 即将推出
+- 🌐 支持更多国际化 AI 提供商
+- 📚 提交信息模板库功能
+- 🔄 提交历史分析和建议
+- 🌍 多语言提交信息支持
+- 📊 提交统计和分析面板
+- 🎨 自定义主题和样式支持
+
+### 💡 长期目标
+- 🤝 团队协作功能
+- 📝 代码审查集成
+- 🔗 第三方工具集成（JIRA、Trello等）
+- 🧪 A/B 测试不同提示策略
+- 📈 机器学习个性化推荐
+
+---
+
+## 贡献指南
+
+欢迎提交问题报告和功能请求到我们的 [GitHub Issues](https://github.com/jianxiaofei/AI-message/issues)。
+
+如果您想为项目贡献代码，请查看我们的 [贡献指南](CONTRIBUTING.md)。
+
+## 许可证
+
+本项目采用 [MIT 许可证](LICENSE)。
 - 错误处理和用户体验优化
 
 ### Changed
