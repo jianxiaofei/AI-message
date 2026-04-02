@@ -785,78 +785,107 @@ async function setScmInputBoxValue(message: string): Promise<boolean> {
     try {
         // 方法1：尝试Git扩展API
         const gitExtension = vscode.extensions.getExtension('vscode.git')?.exports;
+        console.log('[SCM] Git扩展:', gitExtension ? '已安装' : '未安装');
         
         if (gitExtension && gitExtension.getAPI) {
-            const git = gitExtension.getAPI(1);
-            if (git && git.repositories.length > 0) {
-                const repo = git.repositories[0];
-                if (repo.inputBox) {
-                    repo.inputBox.value = message;
-                    console.log('通过Git API成功设置提交信息');
-                    
-                    // 尝试聚焦到SCM面板以确保可见性
-                    try {
-                        await vscode.commands.executeCommand('workbench.scm.focus');
-                    } catch (focusError) {
-                        console.log('聚焦SCM面板失败:', focusError);
-                    }
-                    
-                    return true;
-                }
-            }
-        }
-
-        // 方法2：尝试SVN扩展API
-        const svnExtension = vscode.extensions.getExtension('johnstoncode.svn-scm')?.exports;
-        if (svnExtension && svnExtension.getAPI) {
             try {
-                const svn = svnExtension.getAPI();
-                if (svn && svn.repositories && svn.repositories.length > 0) {
-                    const repo = svn.repositories[0];
+                const git = gitExtension.getAPI(1);
+                console.log('[SCM] Git API:', git ? '可用' : '不可用');
+                if (git && git.repositories.length > 0) {
+                    const repo = git.repositories[0];
                     if (repo.inputBox) {
                         repo.inputBox.value = message;
-                        console.log('通过SVN API成功设置提交信息');
-                        
-                        // 聚焦到SCM面板
-                        try {
-                            await vscode.commands.executeCommand('workbench.scm.focus');
-                        } catch (focusError) {
-                            console.log('聚焦SCM面板失败:', focusError);
-                        }
-                        
+                        console.log('[SCM] 通过Git API设置成功');
+                        await focusScmPanel();
                         return true;
                     }
                 }
-            } catch (svnError) {
-                console.log('SVN API调用失败:', svnError);
+            } catch (e) {
+                console.log('[SCM] Git API失败:', e);
             }
         }
 
-        // 方法3：尝试通用SCM API
-        try {
-            const scm = vscode.scm;
-            if (scm && scm.inputBox) {
-                scm.inputBox.value = message;
-                console.log('通过通用SCM API成功设置提交信息');
-                
-                // 聚焦到SCM面板
-                try {
-                    await vscode.commands.executeCommand('workbench.scm.focus');
-                } catch (focusError) {
-                    console.log('聚焦SCM面板失败:', focusError);
+        // 方法2：尝试SVN扩展API (johnstoncode.svn-scm)
+        const svnExt1 = vscode.extensions.getExtension('johnstoncode.svn-scm')?.exports;
+        console.log('[SCM] SVN扩展(johnstoncode):', svnExt1 ? '已安装' : '未安装');
+        
+        if (svnExt1 && svnExt1.getAPI) {
+            try {
+                const svn = svnExt1.getAPI();
+                if (svn?.repositories?.length > 0 && svn.repositories[0].inputBox) {
+                    svn.repositories[0].inputBox.value = message;
+                    console.log('[SCM] 通过SVN扩展(johnstoncode)设置成功');
+                    await focusScmPanel();
+                    return true;
                 }
-                
-                return true;
+            } catch (e) {
+                console.log('[SCM] SVN扩展(johnstoncode)失败:', e);
             }
-        } catch (genericError) {
-            console.log('通用SCM API调用失败:', genericError);
         }
 
-        console.log('未能通过API直接设置SCM提交信息');
+        // 方法3：尝试SVN扩展API (Prisma.vscode-svn)
+        const svnExt2 = vscode.extensions.getExtension('Prisma.vscode-svn')?.exports;
+        console.log('[SCM] SVN扩展(Prisma):', svnExt2 ? '已安装' : '未安装');
+        
+        if (svnExt2 && svnExt2.getAPI) {
+            try {
+                const svn = svnExt2.getAPI();
+                if (svn?.repositories?.length > 0 && svn.repositories[0].inputBox) {
+                    svn.repositories[0].inputBox.value = message;
+                    console.log('[SCM] 通过SVN扩展(Prisma)设置成功');
+                    await focusScmPanel();
+                    return true;
+                }
+            } catch (e) {
+                console.log('[SCM] SVN扩展(Prisma)失败:', e);
+            }
+        }
+
+        // 方法4：尝试通用SCM API
+        console.log('[SCM] 通用SCM:', vscode.scm ? '有' : '无');
+        try {
+            if (vscode.scm?.inputBox) {
+                vscode.scm.inputBox.value = message;
+                if (vscode.scm.inputBox.value === message) {
+                    console.log('[SCM] 通用SCM设置成功');
+                    await focusScmPanel();
+                    return true;
+                }
+            }
+        } catch (e) {
+            console.log('[SCM] 通用SCM失败:', e);
+        }
+
+        // 方法5：回退 - 复制到剪贴板 + 显示提交信息
+        console.log('[SCM] 所有API失败，使用回退方案');
+        await vscode.env.clipboard.writeText(message);
+        
+        const action = await vscode.window.showInformationMessage(
+            '✅ 提交信息已生成并复制到剪贴板',
+            '查看信息',
+            '确定'
+        );
+        
+        if (action === '查看信息') {
+            const doc = await vscode.workspace.openTextDocument({
+                content: message,
+                language: 'plaintext'
+            });
+            await vscode.window.showTextDocument(doc, { preview: true, viewColumn: vscode.ViewColumn.Beside });
+        }
+        
         return false;
     } catch (error) {
-        console.log('设置SCM输入框失败:', error);
+        console.log('[SCM] 异常:', error);
         return false;
+    }
+}
+
+async function focusScmPanel(): Promise<void> {
+    try {
+        await vscode.commands.executeCommand('workbench.view.scm');
+    } catch {
+        // 忽略聚焦失败
     }
 }
 

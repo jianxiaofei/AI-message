@@ -123,109 +123,34 @@
             "custom"
           ],
           "enumDescriptions": [
-            "使用 VS Code GitHub Copilot（推荐）",
-            "使用本地 Ollama 模型",
-            "使用阿里云通义千问",
-            "使用百度文心一言",
-            "使用智谱AI",
-            "自定义 API 接口"
+            "使用 VS Code GitHub Copilot（推荐，无需配置）",
+            "使用本地 Ollama 模型（需配置端点和模型）",
+            "使用阿里云通义千问（需配置 API Key 和模型）",
+            "使用百度文心一言（需配置 API Key 和模型）",
+            "使用智谱AI（需配置 API Key 和模型）",
+            "自定义 OpenAI 兼容 API（需配置端点、Key 和模型）"
           ],
           "default": "copilot",
           "description": "选择AI提供商",
           "order": 1
         },
-        "aiMessage.ai.ollamaEndpoint": {
+        "aiMessage.ai.apiKey": {
           "type": "string",
-          "default": "http://localhost:11434",
-          "description": "Ollama 服务器地址",
+          "default": "",
+          "description": "API Key（Copilot 和 Ollama 无需配置）",
           "order": 2
         },
-        "aiMessage.ai.ollamaModel": {
+        "aiMessage.ai.model": {
           "type": "string",
-          "default": "qwen2.5:7b",
-          "description": "Ollama 模型名称（例如：qwen2.5:7b, llama3:8b, codegemma:7b）",
+          "default": "gpt-4o",
+          "description": "模型名称（Copilot 自动选择，Ollama 默认 qwen2.5:7b）",
           "order": 3
         },
-        "aiMessage.ai.qianwenApiKey": {
+        "aiMessage.ai.endpoint": {
           "type": "string",
           "default": "",
-          "description": "通义千问 API Key",
+          "description": "API 端点（仅 Ollama 和 Custom 需要，如 http://localhost:11434）",
           "order": 4
-        },
-        "aiMessage.ai.qianwenModel": {
-          "type": "string",
-          "enum": [
-            "qwen-max",
-            "qwen-plus",
-            "qwen-turbo",
-            "qwen-7b-chat",
-            "qwen-14b-chat",
-            "qwen-72b-chat"
-          ],
-          "default": "qwen-plus",
-          "description": "通义千问模型",
-          "order": 5
-        },
-        "aiMessage.ai.wenxinApiKey": {
-          "type": "string",
-          "default": "",
-          "description": "文心一言 API Key",
-          "order": 6
-        },
-        "aiMessage.ai.wenxinSecretKey": {
-          "type": "string",
-          "default": "",
-          "description": "文心一言 Secret Key",
-          "order": 7
-        },
-        "aiMessage.ai.wenxinModel": {
-          "type": "string",
-          "enum": [
-            "ernie-4.0-8k",
-            "ernie-3.5-8k",
-            "ernie-speed-8k",
-            "ernie-lite-8k",
-            "ernie-tiny-8k"
-          ],
-          "default": "ernie-3.5-8k",
-          "description": "文心一言模型",
-          "order": 8
-        },
-        "aiMessage.ai.zhipuApiKey": {
-          "type": "string",
-          "default": "",
-          "description": "智谱AI API Key",
-          "order": 9
-        },
-        "aiMessage.ai.zhipuModel": {
-          "type": "string",
-          "enum": [
-            "glm-4",
-            "glm-4-flash",
-            "glm-3-turbo",
-            "codegeex-4"
-          ],
-          "default": "glm-4",
-          "description": "智谱AI模型",
-          "order": 10
-        },
-        "aiMessage.ai.customEndpoint": {
-          "type": "string",
-          "default": "",
-          "description": "自定义 API 接口地址",
-          "order": 11
-        },
-        "aiMessage.ai.customApiKey": {
-          "type": "string",
-          "default": "",
-          "description": "自定义 API Key",
-          "order": 12
-        },
-        "aiMessage.ai.customModel": {
-          "type": "string",
-          "default": "",
-          "description": "自定义模型名称",
-          "order": 13
         },
         "aiMessage.ai.timeout": {
           "type": "number",
@@ -233,86 +158,73 @@
           "minimum": 5000,
           "maximum": 120000,
           "description": "API 请求超时时间（毫秒）",
-          "order": 14
+          "order": 5
         },
         "aiMessage.svn.path": {
           "type": "string",
           "default": "",
-          "description": "可选：自定义 svn 可执行文件路径（例如 /opt/homebrew/bin/svn）",
-          "order": 15
+          "description": "可选：自定义 svn 可执行文件路径",
+          "order": 6
         },
         "aiMessage.git.path": {
           "type": "string",
           "default": "",
-          "description": "可选：自定义 git 可执行文件路径（例如 /usr/local/bin/git）",
-          "order": 16
+          "description": "可选：自定义 git 可执行文件路径",
+          "order": 7
         },
         "aiMessage.commitTemplate": {
           "type": "string",
           "default": "",
-          "description": "提交信息模板 (可选，用 {message} 占位符代表AI生成的信息)",
-          "order": 17
+          "description": "提交信息模板 (可选，用 {message} 占位符)",
+          "order": 8
         },
         "aiMessage.enableFallback": {
           "type": "boolean",
           "default": true,
           "description": "当AI服务不可用时，启用基于规则的后备提交信息生成",
-          "order": 18
+          "order": 9
         },
         "aiMessage.commit.enableEmoji": {
           "type": "boolean",
           "default": true,
           "description": "在提交信息中启用 emoji 图标",
-          "order": 19
+          "order": 10
         },
         "aiMessage.commit.enableBody": {
           "type": "boolean",
           "default": true,
           "description": "在提交信息中包含详细的正文内容",
-          "order": 20
+          "order": 11
         },
         "aiMessage.commit.enableScope": {
           "type": "boolean",
           "default": true,
-          "description": "在提交信息中自动推断和添加作用域 (scope)",
-          "order": 21
+          "description": "在提交信息中包含 scope（模块名）",
+          "order": 12
         },
         "aiMessage.commit.language": {
           "type": "string",
-          "enum": [
-            "简体中文",
-            "繁體中文",
-            "English",
-            "日本語",
-            "한국어"
-          ],
           "default": "简体中文",
-          "description": "提交信息的语言",
-          "order": 22
-        },
-        "aiMessage.streaming.forceOutputChannel": {
-          "type": "boolean",
-          "default": false,
-          "description": "强制使用输出面板显示流式生成内容（调试或SVN输入框无法写入时可开启）",
-          "order": 23
-        },
-        "aiMessage.debug.enableStreamingLog": {
-          "type": "boolean",
-          "default": false,
-          "description": "启用详细的流式调试日志（包含fragment次数、长度、fallback情况）",
-          "order": 24
+          "description": "提交信息生成语言",
+          "order": 13
         },
         "aiMessage.commit.intelligentBody": {
           "type": "boolean",
           "default": true,
-          "description": "启用智能body生成（基于代码diff分析函数变更、导入变更等）",
-          "order": 25
+          "description": "使用智能分析生成详细的 body 描述",
+          "order": 14
         },
         "aiMessage.commit.bodyQualityCheck": {
           "type": "boolean",
           "default": true,
-          "description": "启用body质量检查（长度检查、重复内容检查、格式标准化）",
-          "order": 26
+          "description": "启用 body 质量检查和优化",
+          "order": 15
+        },
+        "aiMessage.debug.enableStreamingLog": {
+          "type": "boolean",
+          "default": false,
+          "description": "启用流式生成调试日志",
+          "order": 16
         }
       }
     }
