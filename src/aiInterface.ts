@@ -1,4 +1,4 @@
-import { VcsFile } from './vcsInterface';
+import { VcsFile } from './vcs';
 
 export interface AIProvider {
     readonly name: string;

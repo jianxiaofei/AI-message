@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AIProvider, AIConfig } from '../aiInterface';
-import { VcsFile } from '../vcsInterface';
+import { VcsFile } from '../vcs';
 
 // 各提供商默认端点和模型
 const PROVIDER_DEFAULTS: Record<string, { endpoint?: string; model: string }> = {
@@ -306,4 +306,4 @@ export function createProvider(config: AIConfig): AIProvider {
     }
 }
 
-export { PROVIDER_DEFAULTS, EMOJI_MAP };
+export { PROVIDER_DEFAULTS, EMOJI_MAP, buildPrompt, extractCommitMessage };

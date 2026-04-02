@@ -3,7 +3,7 @@ import { promisify } from 'util';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { IVersionControlService, VcsStatus, VcsFile } from './vcsInterface';
+import { IVersionControlService, VcsStatus, VcsFile } from '../vcsInterface';
 
 const execAsync = promisify(exec);
 

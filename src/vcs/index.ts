@@ -1,7 +1,8 @@
-import * as vscode from 'vscode';
-import { SvnService } from './svnService';
+import { IVersionControlService, VcsFile, VcsStatus } from '../vcsInterface';
 import { GitService } from './gitService';
-import { IVersionControlService } from './vcsInterface';
+import { SvnService } from './svnService';
+
+export { GitService, SvnService, IVersionControlService, VcsFile, VcsStatus };
 
 export class VcsFactory {
     /**

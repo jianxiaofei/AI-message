@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { AIProvider, AIConfig } from './aiInterface';
 import { createProvider, CopilotProvider, OllamaProvider, QianwenProvider, WenxinProvider, ZhipuProvider, CustomProvider } from './providers';
-import { VcsFile } from './vcsInterface';
+import { VcsFile } from './vcs';
 
 const PROVIDER_DEFAULTS: Record<string, { endpoint?: string; model: string }> = {
     copilot: { model: 'gpt-4o' },
