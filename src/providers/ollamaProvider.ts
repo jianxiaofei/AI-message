@@ -1,5 +1,5 @@
 import { AIConfig } from '../aiInterface';
-import { SvnFile } from '../svnService';
+import { VcsFile } from '../vcsInterface';
 import { BaseProvider } from './baseProvider';
 
 export class OllamaProvider extends BaseProvider {
@@ -22,7 +22,7 @@ export class OllamaProvider extends BaseProvider {
         }
     }
 
-    async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {
+    async generateCommitMessage(diff: string, changedFiles: VcsFile[]): Promise<string> {
         const endpoint = this.config?.ollamaEndpoint || 'http://localhost:11434';
         const model = this.config?.ollamaModel || 'qwen2.5:7b';
         
@@ -60,6 +60,7 @@ export class OllamaProvider extends BaseProvider {
 
         } catch (error) {
             this.handleApiError(error, 'Ollama');
+            throw error;
         }
     }
 }

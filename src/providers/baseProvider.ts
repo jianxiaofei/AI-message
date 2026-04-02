@@ -1,5 +1,5 @@
 import { AIProvider, AIConfig } from '../aiInterface';
-import { SvnFile } from '../svnService';
+import { VcsFile } from '../vcsInterface';
 
 export abstract class BaseProvider implements AIProvider {
     abstract readonly name: string;
@@ -10,17 +10,17 @@ export abstract class BaseProvider implements AIProvider {
     }
 
     abstract isAvailable(): Promise<boolean>;
-    abstract generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string>;
+    abstract generateCommitMessage(diff: string, changedFiles: VcsFile[]): Promise<string>;
 
     /**
      * 构建基础提示词的公共部分
      */
-    protected buildBasePrompt(diff: string, changedFiles: SvnFile[]): string {
+    protected buildBasePrompt(diff: string, changedFiles: VcsFile[]): string {
         const filesDescription = changedFiles.map(file => 
             `${file.path} (${this.getStatusDescription(file.status)})`
         ).join('\n');
 
-        return `# SVN Commit Message Guide
+        return `# Commit Message Guide
 
 **CRITICAL INSTRUCTION: YOU MUST FOLLOW THESE EXACT REQUIREMENTS**
 1. OUTPUT ONLY THE COMMIT MESSAGE IN 简体中文

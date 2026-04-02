@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { VcsFactory } from './vcsFactory';
-import { IVersionControlService } from './vcsInterface';
+import { IVersionControlService, VcsFile, VcsStatus } from './vcsInterface';
 import { AIService } from './aiProviderFactory';
 
 let vcsService: IVersionControlService | null = null;
@@ -60,7 +60,7 @@ async function unifiedGenerateCommit() {
         if (!changes) {return;}
 
         // 获取待提交文件列表（排除ignore）
-        const status = await vcsService!.getCommitReadyChanges();
+        const status = await vcs.getCommitReadyChanges();
         const changedFiles = status.changedFiles;
         const vcsType = status.vcsType;
 
@@ -73,7 +73,6 @@ async function unifiedGenerateCommit() {
         }
 
         progress.report({ increment: 55, message: '模型流式生成中...' });
-        // 重用已有流式函数：需要一个封装新增参数（此处直接调用现有 generateWithCopilotStreaming）
         try {
             await generateWithCopilotStreaming(changes, changedFiles, progress, { fallbackToOutput: !scmWritable });
             progress.report({ increment: 100, message: '完成' });
@@ -187,14 +186,12 @@ interface StreamOptions {
     fallbackToOutput?: boolean;
 }
 
-// generateCommitMessageStreaming 已被 unifiedGenerateCommit + generateWithCopilotStreaming 取代
-
 /**
  * 使用Copilot流式生成提交信息
  */
 async function generateWithCopilotStreaming(
     changes: string,
-    changedFiles: any[],
+    changedFiles: VcsFile[],
     progress: vscode.Progress<{ increment?: number; message?: string }>,
     options: StreamOptions = {}
 ): Promise<void> {
@@ -218,88 +215,92 @@ async function generateWithCopilotStreaming(
         }
 
         // 构建提示信息
-    const vcsType = vcsService?.getVcsType?.() || 'git';
-    const prompt = buildCopilotPrompt(changes, changedFiles, vcsType);
+        const vcsType = vcsService?.getVcsType?.() || 'git';
+        const prompt = buildCopilotPrompt(changes, changedFiles, vcsType);
         const messages = [
             vscode.LanguageModelChatMessage.User(prompt)
         ];
 
         // 开始流式请求
-        const response = await model.sendRequest(messages, {}, new vscode.CancellationTokenSource().token);
-        const debug = vscode.workspace.getConfiguration('aiMessage').get<boolean>('debug.enableStreamingLog', false);
-        if (debug) {
-            console.log('[AI-Message][Stream] 启动流式，会话模型:', model.id);
-        }
-
-        let result = '';
-        let lastUpdateTime = Date.now();
-        const updateInterval = 200; // 每200ms更新一次界面
-        let fragmentCount = 0;
-        let firstChunkTime: number | null = null;
-        const startTime = Date.now();
-        
-        for await (const fragment of response.text) {
-            fragmentCount++;
-            if (firstChunkTime === null) {firstChunkTime = Date.now();}
-            result += fragment;
+        const cts = new vscode.CancellationTokenSource();
+        try {
+            const response = await model.sendRequest(messages, {}, cts.token);
+            const debug = vscode.workspace.getConfiguration('aiMessage').get<boolean>('debug.enableStreamingLog', false);
             if (debug) {
-                console.log(`[AI-Message][Stream] 片段#${fragmentCount} 长度=${fragment.length} 累计=${result.length}`);
+                console.log('[AI-Message][Stream] 启动流式，会话模型:', model.id);
             }
+
+            let result = '';
+            let lastUpdateTime = Date.now();
+            const updateInterval = 200; // 每200ms更新一次界面
+            let fragmentCount = 0;
+            let firstChunkTime: number | null = null;
+            const startTime = Date.now();
             
-            // 定期更新输入框，避免过于频繁的UI更新
-            const now = Date.now();
-            if (now - lastUpdateTime > updateInterval) {
-                const displayText = result.length > 10 ? 
-                    `🤖 AI正在生成...\n\n${result}${result.endsWith('\n') ? '' : '...'}`
-                    : "🤖 AI正在思考...";
-                    
-                const ok = await setScmInputBoxValue(displayText);
-                if (debug && !ok && !options.fallbackToOutput) {
-                    console.log('[AI-Message][Stream] SCM写入失败但未启用fallbackToOutput');
+            for await (const fragment of response.text) {
+                fragmentCount++;
+                if (firstChunkTime === null) {firstChunkTime = Date.now();}
+                result += fragment;
+                if (debug) {
+                    console.log(`[AI-Message][Stream] 片段#${fragmentCount} 长度=${fragment.length} 累计=${result.length}`);
                 }
-                if (!ok && options.fallbackToOutput) {
+                
+                // 定期更新输入框，避免过于频繁的UI更新
+                const now = Date.now();
+                if (now - lastUpdateTime > updateInterval) {
+                    const displayText = result.length > 10 ? 
+                        `🤖 AI正在生成...\n\n${result}${result.endsWith('\n') ? '' : '...'}`
+                        : "🤖 AI正在思考...";
+                        
+                    const ok = await setScmInputBoxValue(displayText);
+                    if (debug && !ok && !options.fallbackToOutput) {
+                        console.log('[AI-Message][Stream] SCM写入失败但未启用fallbackToOutput');
+                    }
+                    if (!ok && options.fallbackToOutput) {
+                        outputChannel.show(true);
+                        outputChannel.replace ? outputChannel.replace(displayText) : (function(){
+                            // 没有replace方法时简单清屏再写
+                            outputChannel.clear();
+                            outputChannel.append(displayText);
+                        })();
+                        if (debug) {
+                            console.log('[AI-Message][Stream] 已写入OutputChannel (fallback)');
+                        }
+                    }
+                    lastUpdateTime = now;
+                    
+                    // 更新进度
+                    const progressIncrement = Math.min(85 + (result.length / 10), 95);
+                    progress.report({ increment: progressIncrement, message: "实时生成中..." });
+                }
+            }
+
+            // 最终处理和设置完整结果
+            if (result.trim()) {
+                // 提取提交信息（去掉可能的前缀和格式）
+                const cleanMessage = extractCommitMessage(result.trim());
+                if (debug) {
+                    const totalMs = Date.now() - startTime;
+                    const ttfb = firstChunkTime ? (firstChunkTime - startTime) : -1;
+                    console.log(`[AI-Message][Stream] 完成，总片段=${fragmentCount}, 总长度=${result.length}, 首字节(ms)=${ttfb}, 总耗时(ms)=${totalMs}`);
+                }
+                const formatted = enforceConventionalCommit(cleanMessage, changedFiles, changes);
+                const finalOk = await setScmInputBoxValue(formatted);
+                if (!finalOk && options.fallbackToOutput) {
                     outputChannel.show(true);
-                    outputChannel.replace ? outputChannel.replace(displayText) : (function(){
-                        // 没有replace方法时简单清屏再写
-                        outputChannel.clear();
-                        outputChannel.append(displayText);
-                    })();
+                    outputChannel.appendLine('\n=== 最终提交信息 ===');
+                    outputChannel.appendLine(formatted);
                     if (debug) {
-                        console.log('[AI-Message][Stream] 已写入OutputChannel (fallback)');
+                        console.log('[AI-Message][Stream] 最终结果写入OutputChannel');
                     }
                 }
-                lastUpdateTime = now;
-                
-                // 更新进度
-                const progressIncrement = Math.min(85 + (result.length / 10), 95);
-                progress.report({ increment: progressIncrement, message: "实时生成中..." });
+                progress.report({ increment: 100, message: "完成！" });
+            } else {
+                throw new Error('生成的内容为空');
             }
+        } finally {
+            cts.dispose();
         }
-
-        // 最终处理和设置完整结果
-        if (result.trim()) {
-            // 提取提交信息（去掉可能的前缀和格式）
-            const cleanMessage = extractCommitMessage(result.trim());
-            if (debug) {
-                const totalMs = Date.now() - startTime;
-                const ttfb = firstChunkTime ? (firstChunkTime - startTime) : -1;
-                console.log(`[AI-Message][Stream] 完成，总片段=${fragmentCount}, 总长度=${result.length}, 首字节(ms)=${ttfb}, 总耗时(ms)=${totalMs}`);
-            }
-            const formatted = enforceConventionalCommit(cleanMessage, changedFiles, changes);
-            const finalOk = await setScmInputBoxValue(formatted);
-            if (!finalOk && options.fallbackToOutput) {
-                outputChannel.show(true);
-                outputChannel.appendLine('\n=== 最终提交信息 ===');
-                outputChannel.appendLine(formatted);
-                if (debug) {
-                    console.log('[AI-Message][Stream] 最终结果写入OutputChannel');
-                }
-            }
-            progress.report({ increment: 100, message: "完成！" });
-        } else {
-            throw new Error('生成的内容为空');
-        }
-        
     } catch (error) {
         console.error('Copilot流式生成失败:', error);
         // 回退到普通生成
@@ -315,7 +316,7 @@ async function generateWithCopilotStreaming(
 /**
  * 构建Copilot提示信息
  */
-function buildCopilotPrompt(diff: string, changedFiles: any[], vcsType: string): string {
+function buildCopilotPrompt(diff: string, changedFiles: VcsFile[], vcsType: string): string {
     const config = vscode.workspace.getConfiguration('aiMessage');
     // 统一使用 commit.* 新键名；兼容旧键名（如果用户还未升级 settings）
     const enableEmoji = config.get('commit.enableEmoji', config.get('commitFormat.enableEmoji', true));
@@ -431,7 +432,7 @@ function extractCommitMessage(content: string): string {
 /**
  * 智能分析diff内容生成详细的body描述
  */
-function generateIntelligentBody(diff: string, changedFiles: any[], isZh: boolean = true): string {
+function generateIntelligentBody(diff: string, changedFiles: VcsFile[], isZh: boolean = true): string {
     const bodyLines: string[] = [];
     
     // 分析diff内容
@@ -545,13 +546,13 @@ function analyzeDiffContent(diff: string) {
 /**
  * 分析文件变更，提取模块信息
  */
-function analyzeFileChanges(changedFiles: any[]) {
+function analyzeFileChanges(changedFiles: VcsFile[]) {
     const analysis = {
         affectedModules: [] as string[]
     };
     
     for (const file of changedFiles) {
-        const path = file.path || file;
+        const path = file.path;
         const pathParts = path.split('/');
         
         // 提取模块名
@@ -578,11 +579,11 @@ function analyzeFileChanges(changedFiles: any[]) {
 /**
  * 生成基础body内容（回退方案）
  */
-function generateBasicBody(changedFiles: any[], isZh: boolean = true): string {
-    const filesByType = changedFiles.reduce((acc: any, file: any) => {
+function generateBasicBody(changedFiles: VcsFile[], isZh: boolean = true): string {
+    const filesByType = changedFiles.reduce((acc: Record<string, string[]>, file: VcsFile) => {
         const status = file.status || 'M';
         if (!acc[status]) {acc[status] = [];}
-        acc[status].push(file.path || file);
+        acc[status].push(file.path);
         return acc;
     }, {});
     
@@ -632,10 +633,13 @@ function validateAndOptimizeBody(body: string, isZh: boolean = true): { body: st
         .map(line => {
             const trimmed = line.trim();
             // 确保项目符号格式统一
-            if (trimmed && !trimmed.startsWith('-') && !trimmed.startsWith('*') && !trimmed.startsWith('•')) {
+            if (trimmed.startsWith('-') || trimmed.startsWith('*') || trimmed.startsWith('•')) {
+                return trimmed.startsWith('-') ? trimmed : `- ${trimmed.substring(1).trim()}`;
+            }
+            if (trimmed) {
                 return `- ${trimmed}`;
             }
-            return trimmed.startsWith('-') ? trimmed : `- ${trimmed.substring(1).trim()}`;
+            return trimmed;
         })
         .filter(line => line.trim())
         .join('\n');
@@ -654,7 +658,7 @@ function validateAndOptimizeBody(body: string, isZh: boolean = true): { body: st
 }
 
 // 规范化提交信息，强制符合 Conventional Commits 基础格式
-function enforceConventionalCommit(raw: string, changedFiles?: any[], diff?: string): string {
+function enforceConventionalCommit(raw: string, changedFiles?: VcsFile[], diff?: string): string {
     const config = vscode.workspace.getConfiguration('aiMessage');
     const enableEmoji = config.get('commit.enableEmoji', config.get('commitFormat.enableEmoji', true));
     const enableBody = config.get('commit.enableBody', config.get('commitFormat.enableBody', true));
@@ -774,49 +778,6 @@ async function generateCommitMessage(changes: string): Promise<string | null> {
     }
 }
 
-async function handleCommitMessageGenerated(commitMessage: string) {
-    try {
-        // 优先尝试填充到SCM输入框
-        const success = await setScmInputBoxValue(commitMessage);
-        
-        if (success) {
-            vscode.window.showInformationMessage(
-                '✅ 提交信息已生成并填充到Source Control输入框！',
-                '查看信息'
-            ).then(action => {
-                if (action === '查看信息') {
-                    showCommitMessagePreview(commitMessage);
-                }
-            });
-        } else {
-            // 回退到剪贴板方式
-            await vscode.env.clipboard.writeText(commitMessage);
-            
-            const action = await vscode.window.showInformationMessage(
-                '提交信息已生成并复制到剪贴板！',
-                { modal: false },
-                '查看信息',
-                '编辑信息',
-                '提交说明'
-            );
-            
-            switch (action) {
-                case '查看信息':
-                    await showCommitMessagePreview(commitMessage);
-                    break;
-                case '编辑信息':
-                    await editCommitMessage(commitMessage);
-                    break;
-                case '提交说明':
-                    await showCommitHelp();
-                    break;
-            }
-        }
-    } catch (error) {
-        await handleError('处理生成的提交信息时发生错误', error);
-    }
-}
-
 /**
  * 尝试将提交信息设置到SCM输入框中
  */
@@ -919,61 +880,6 @@ async function showCommitMessagePreview(commitMessage: string) {
     }
 }
 
-async function editCommitMessage(commitMessage: string) {
-    try {
-        const editedMessage = await vscode.window.showInputBox({
-            title: '编辑提交信息',
-            value: commitMessage,
-            prompt: '修改提交信息后按回车确认',
-            ignoreFocusOut: true
-        });
-        
-        if (editedMessage !== undefined && editedMessage.trim().length > 0) {
-            await vscode.env.clipboard.writeText(editedMessage.trim());
-            vscode.window.showInformationMessage('编辑后的提交信息已复制到剪贴板！');
-        }
-    } catch (error) {
-        await handleError('编辑提交信息时发生错误', error);
-    }
-}
-
-async function showCommitHelp() {
-    const helpMessage = `## 如何使用生成的提交信息
-
-1. **已复制到剪贴板** - 提交信息已自动复制，可直接粘贴使用
-
-2. **SVN提交步骤**:
-   - 打开终端或SVN客户端
-   - 使用 \`svn commit -m "粘贴提交信息"\`
-   - 或在SVN GUI中粘贴到提交信息框
-
-3. **提交信息格式** - 遵循 Conventional Commits 规范:
-   - \`feat: 新功能\`
-   - \`fix: 错误修复\`
-   - \`docs: 文档更新\`
-   - \`style: 代码格式化\`
-   - \`refactor: 代码重构\`
-
-4. **快捷键**:
-   - Cmd+Alt+G: 生成提交信息
-   - Cmd+Alt+Q: 快速生成`;
-    
-    try {
-        const document = await vscode.workspace.openTextDocument({
-            content: helpMessage.trim(),
-            language: 'markdown'
-        });
-        
-        await vscode.window.showTextDocument(document, {
-            preview: true,
-            viewColumn: vscode.ViewColumn.Beside
-        });
-    } catch (error) {
-        console.error('显示帮助信息时发生错误:', error);
-        vscode.window.showInformationMessage('请参考扩展说明或联系支持');
-    }
-}
-
 async function handleConfigureAI() {
     try {
         const status = await aiService.getProviderStatus();
@@ -1066,7 +972,7 @@ async function testAIConnection() {
     });
 }
 
-async function handleError(context: string, error: any) {
+async function handleError(context: string, error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
     console.error(`${context}:`, error);
@@ -1078,7 +984,7 @@ async function handleError(context: string, error: any) {
     );
     
     if (action === '重试') {
-        vscode.commands.executeCommand('ai-message.generateCommitMessage');
+        await vscode.commands.executeCommand('ai-message.generateCommitMessage');
     } else if (action === '报告问题') {
         vscode.env.openExternal(vscode.Uri.parse('https://github.com/jianxiaofei/AI-message/issues'));
     }

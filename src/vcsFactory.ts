@@ -25,15 +25,4 @@ export class VcsFactory {
         console.log('未检测到支持的版本控制系统');
         return null;
     }
-
-    /**
-     * 获取当前工作区的版本控制系统类型
-     */
-    static async detectVcsType(): Promise<'git' | 'svn' | 'none'> {
-        const service = await VcsFactory.createService();
-        if (!service) {
-            return 'none';
-        }
-        return service.getVcsType();
-    }
 }

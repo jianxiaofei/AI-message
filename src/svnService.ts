@@ -7,14 +7,6 @@ import { IVersionControlService, VcsStatus, VcsFile } from './vcsInterface';
 
 const execAsync = promisify(exec);
 
-export interface SvnStatus extends VcsStatus {
-    // SVN特定的扩展属性可以在这里添加
-}
-
-export interface SvnFile extends VcsFile {
-    // SVN特定的扩展属性可以在这里添加
-}
-
 export class SvnService implements IVersionControlService {
     private workspaceRoot: string;
     private svnPath: string;
@@ -95,7 +87,7 @@ export class SvnService implements IVersionControlService {
         }
     }
 
-    async getStatus(): Promise<SvnStatus> {
+    async getStatus(): Promise<VcsStatus> {
         if (!await this.isInSvnRepository()) {
             return {
                 isRepository: false,
@@ -107,7 +99,7 @@ export class SvnService implements IVersionControlService {
 
         try {
             const { stdout } = await execAsync(`"${this.svnPath}" status`, { cwd: this.workspaceRoot });
-            const changedFiles = this.parseSvnStatus(stdout);
+            const changedFiles = this.parseVcsStatus(stdout);
             
             return {
                 isRepository: true,
@@ -129,7 +121,7 @@ export class SvnService implements IVersionControlService {
     /**
      * 获取VS Code Source Control中的变更（不包括ignore-on-commit的文件）
      */
-    async getSourceControlChanges(): Promise<SvnStatus> {
+    async getSourceControlChanges(): Promise<VcsStatus> {
         if (!await this.isInSvnRepository()) {
             return {
                 isRepository: false,
@@ -167,7 +159,7 @@ export class SvnService implements IVersionControlService {
     /**
      * 过滤掉ignore-on-commit的文件
      */
-    private async filterIgnoreOnCommitFiles(allFiles: SvnFile[]): Promise<SvnFile[]> {
+    private async filterIgnoreOnCommitFiles(allFiles: VcsFile[]): Promise<VcsFile[]> {
         try {
             // 方法1: 通过VS Code工作区配置
             const workspaceConfig = vscode.workspace.getConfiguration('svn');
@@ -238,7 +230,7 @@ export class SvnService implements IVersionControlService {
     /**
      * 获取准备提交的变更（只包含Changes列表，排除ignore-on-commit等其他列表）
      */
-    async getCommitReadyChanges(): Promise<SvnStatus> {
+    async getCommitReadyChanges(): Promise<VcsStatus> {
         if (!await this.isInSvnRepository()) {
             return {
                 isRepository: false,
@@ -256,7 +248,7 @@ export class SvnService implements IVersionControlService {
             const changelistInfo = await this.getChangelistInfo();
             const ignoreOnCommitFiles = new Set(changelistInfo.ignoreOnCommitFiles || []);
             
-            const allFiles = this.parseSvnStatus(stdout);
+            const allFiles = this.parseVcsStatus(stdout);
             
             // 过滤掉ignore-on-commit列表中的文件
             const commitReadyFiles = allFiles.filter(file => {
@@ -365,29 +357,8 @@ export class SvnService implements IVersionControlService {
             return { ignoreOnCommitFiles };
             
         } catch (error) {
-            // 如果命令失败，尝试替代方案
-            console.log('SVN status命令失败，尝试替代方案:', error);
-            return await this.getChangelistInfoFallback();
-        }
-    }
-
-    /**
-     * 获取changelist信息的备用方案
-     */
-    private async getChangelistInfoFallback(): Promise<{ ignoreOnCommitFiles?: string[] }> {
-        try {
-            // 方案1：通过svn status查看是否有changelist标记
-            const { stdout } = await execAsync(`"${this.svnPath}" status`, { cwd: this.workspaceRoot });
-            const ignoreOnCommitFiles: string[] = [];
-            
-            // 解析状态输出，查找可能的changelist信息
-            // 注意：这种方法可能不完美，因为标准svn status不显示changelist信息
-            
-            console.log('使用备用方案检查changelist，将处理所有变更文件');
-            return {};
-        } catch (error) {
-            console.log('所有changelist检测方案都失败，将处理所有变更文件');
-            return {};
+            console.log('检查changelist失败，将处理所有变更文件:', error);
+            return { ignoreOnCommitFiles: [] };
         }
     }
 
@@ -418,7 +389,7 @@ export class SvnService implements IVersionControlService {
             diffResult += `准备提交的文件: ${changedFiles.length}个\n`;
             
             // 按状态分组统计
-            const statusGroups: { [key: string]: SvnFile[] } = {};
+            const statusGroups: { [key: string]: VcsFile[] } = {};
             changedFiles.forEach(file => {
                 if (!statusGroups[file.status]) {
                     statusGroups[file.status] = [];
@@ -515,8 +486,8 @@ export class SvnService implements IVersionControlService {
         });
     }
 
-    private parseSvnStatus(statusOutput: string): SvnFile[] {
-        const files: SvnFile[] = [];
+    private parseVcsStatus(statusOutput: string): VcsFile[] {
+        const files: VcsFile[] = [];
         const lines = statusOutput.trim().split('\n');
 
         for (const line of lines) {

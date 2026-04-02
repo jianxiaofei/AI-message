@@ -1,9 +1,9 @@
-import { SvnFile } from './svnService';
+import { VcsFile } from './vcsInterface';
 
 export interface AIProvider {
     readonly name: string;
     isAvailable(): Promise<boolean>;
-    generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string>;
+    generateCommitMessage(diff: string, changedFiles: VcsFile[]): Promise<string>;
 }
 
 export interface AIConfig {
@@ -37,10 +37,4 @@ export interface AIConfig {
     customEndpoint?: string;
     customApiKey?: string;
     customModel?: string;
-}
-
-export interface APIResponse {
-    success: boolean;
-    data?: string;
-    error?: string;
 }

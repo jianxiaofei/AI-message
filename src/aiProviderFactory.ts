@@ -6,18 +6,10 @@ import { QianwenProvider } from './providers/qianwenProvider';
 import { WenxinProvider } from './providers/wenxinProvider';
 import { ZhipuProvider } from './providers/zhipuProvider';
 import { CustomProvider } from './providers/customProvider';
-import { SvnFile } from './svnService';
+import { VcsFile } from './vcsInterface';
 
 export class AIProviderFactory {
-    private static providers: Map<string, AIProvider> = new Map();
-
     static async createProvider(config: AIConfig): Promise<AIProvider> {
-        const key = `${config.provider}-${JSON.stringify(config)}`;
-        
-        if (this.providers.has(key)) {
-            return this.providers.get(key)!;
-        }
-
         let provider: AIProvider;
 
         switch (config.provider) {
@@ -43,7 +35,6 @@ export class AIProviderFactory {
                 throw new Error(`不支持的AI提供商: ${config.provider}`);
         }
 
-        this.providers.set(key, provider);
         return provider;
     }
 
@@ -76,7 +67,7 @@ export class AIProviderFactory {
         const config = vscode.workspace.getConfiguration('aiMessage');
         
         return {
-            provider: config.get('ai.provider', 'copilot') as any,
+            provider: config.get('ai.provider', 'copilot'),
             timeout: config.get('ai.timeout', 30000),
             
             // 提交信息格式配置
@@ -140,7 +131,7 @@ export class AIService {
         return this.provider;
     }
 
-    async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {
+    async generateCommitMessage(diff: string, changedFiles: VcsFile[]): Promise<string> {
         if (!this.provider) {
             await this.refreshProvider();
         }
@@ -198,7 +189,7 @@ export class AIService {
         return null;
     }
 
-    private generateFallbackMessage(diff: string, changedFiles: SvnFile[]): string {
+    private generateFallbackMessage(diff: string, changedFiles: VcsFile[]): string {
         // 基于规则的简单提交信息生成
         const fileTypes = new Set(changedFiles.map(f => f.path.split('.').pop()?.toLowerCase()));
         const operations = new Set(changedFiles.map(f => f.status));

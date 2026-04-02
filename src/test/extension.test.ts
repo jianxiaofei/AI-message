@@ -1,6 +1,5 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import * as path from 'path';
 
 // Import your extension modules to test them
 // Note: You may need to adjust these imports based on your actual export structure

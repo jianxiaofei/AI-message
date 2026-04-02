@@ -1,5 +1,5 @@
 import { AIConfig } from '../aiInterface';
-import { SvnFile } from '../svnService';
+import { VcsFile } from '../vcsInterface';
 import { BaseProvider } from './baseProvider';
 
 export class QianwenProvider extends BaseProvider {
@@ -13,7 +13,7 @@ export class QianwenProvider extends BaseProvider {
         return !!this.config?.qianwenApiKey;
     }
 
-    async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {
+    async generateCommitMessage(diff: string, changedFiles: VcsFile[]): Promise<string> {
         if (!this.config?.qianwenApiKey) {
             throw new Error('请配置通义千问API Key');
         }
@@ -79,6 +79,7 @@ export class QianwenProvider extends BaseProvider {
 
         } catch (error) {
             this.handleApiError(error, '通义千问');
+            throw error;
         }
     }
 }

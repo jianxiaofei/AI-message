@@ -1,5 +1,5 @@
 import { AIConfig } from '../aiInterface';
-import { SvnFile } from '../svnService';
+import { VcsFile } from '../vcsInterface';
 import { BaseProvider } from './baseProvider';
 
 export class CustomProvider extends BaseProvider {
@@ -13,7 +13,7 @@ export class CustomProvider extends BaseProvider {
         return !!(this.config?.customEndpoint && this.config?.customApiKey);
     }
 
-    async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {
+    async generateCommitMessage(diff: string, changedFiles: VcsFile[]): Promise<string> {
         if (!this.config?.customEndpoint) {
             throw new Error('请配置自定义API接口地址');
         }
@@ -88,6 +88,7 @@ export class CustomProvider extends BaseProvider {
 
         } catch (error) {
             this.handleApiError(error, '自定义API');
+            throw error;
         }
     }
 }

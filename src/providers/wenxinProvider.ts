@@ -1,5 +1,5 @@
 import { AIConfig } from '../aiInterface';
-import { SvnFile } from '../svnService';
+import { VcsFile } from '../vcsInterface';
 import { BaseProvider } from './baseProvider';
 
 export class WenxinProvider extends BaseProvider {
@@ -15,7 +15,7 @@ export class WenxinProvider extends BaseProvider {
         return !!(this.config?.wenxinApiKey && this.config?.wenxinSecretKey);
     }
 
-    async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {
+    async generateCommitMessage(diff: string, changedFiles: VcsFile[]): Promise<string> {
         if (!this.config?.wenxinApiKey || !this.config?.wenxinSecretKey) {
             throw new Error('请配置文心一言API Key和Secret Key');
         }
@@ -77,6 +77,7 @@ export class WenxinProvider extends BaseProvider {
 
         } catch (error) {
             this.handleApiError(error, '文心一言');
+            throw error;
         }
     }
 

@@ -1,5 +1,5 @@
 import { AIConfig } from '../aiInterface';
-import { SvnFile } from '../svnService';
+import { VcsFile } from '../vcsInterface';
 import { BaseProvider } from './baseProvider';
 
 export class ZhipuProvider extends BaseProvider {
@@ -13,7 +13,7 @@ export class ZhipuProvider extends BaseProvider {
         return !!this.config?.zhipuApiKey;
     }
 
-    async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {
+    async generateCommitMessage(diff: string, changedFiles: VcsFile[]): Promise<string> {
         if (!this.config?.zhipuApiKey) {
             throw new Error('请配置智谱AI API Key');
         }
@@ -72,6 +72,7 @@ export class ZhipuProvider extends BaseProvider {
 
         } catch (error) {
             this.handleApiError(error, '智谱AI');
+            throw error;
         }
     }
 }

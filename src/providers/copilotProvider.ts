@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AIProvider } from '../aiInterface';
-import { SvnFile } from '../svnService';
+import { VcsFile } from '../vcsInterface';
 
 export class CopilotProvider implements AIProvider {
     readonly name = 'GitHub Copilot';
@@ -15,7 +15,7 @@ export class CopilotProvider implements AIProvider {
         }
     }
 
-    async generateCommitMessage(diff: string, changedFiles: SvnFile[]): Promise<string> {
+    async generateCommitMessage(diff: string, changedFiles: VcsFile[]): Promise<string> {
         try {
             // 尝试获取 Copilot 模型
             const models = await vscode.lm.selectChatModels({ 
@@ -41,14 +41,19 @@ export class CopilotProvider implements AIProvider {
                 vscode.LanguageModelChatMessage.User(prompt)
             ];
 
-            const response = await model.sendRequest(messages, {}, new vscode.CancellationTokenSource().token);
-            
-            let result = '';
-            for await (const fragment of response.text) {
-                result += fragment;
-            }
+            const cts = new vscode.CancellationTokenSource();
+            try {
+                const response = await model.sendRequest(messages, {}, cts.token);
+                
+                let result = '';
+                for await (const fragment of response.text) {
+                    result += fragment;
+                }
 
-            return this.extractCommitMessage(result.trim());
+                return this.extractCommitMessage(result.trim());
+            } finally {
+                cts.dispose();
+            }
 
         } catch (error) {
             console.error('Copilot API生成失败:', error);
@@ -59,7 +64,7 @@ export class CopilotProvider implements AIProvider {
         }
     }
 
-    private buildPrompt(diff: string, changedFiles: SvnFile[]): string {
+    private buildPrompt(diff: string, changedFiles: VcsFile[]): string {
         // 分析文件类型和变更类型
         const fileAnalysis = this.analyzeChanges(changedFiles, diff);
         const filesDescription = changedFiles.map(file => 
@@ -146,7 +151,7 @@ ${filesDescription}
 ## 变更分析:
 ${fileAnalysis}
 
-## SVN代码差异:
+## 代码差异:
 \`\`\`diff
 ${diff}
 \`\`\`
@@ -270,11 +275,11 @@ ${diff}
         return emojiMap[type] || '✨';
     }
 
-    private analyzeChanges(changedFiles: SvnFile[], diff: string): string {
+    private analyzeChanges(changedFiles: VcsFile[], diff: string): string {
         const analysis: string[] = [];
         
         // === 1. 文件类型和规模分析 ===
-        const fileTypes: { [key: string]: SvnFile[] } = {};
+        const fileTypes: { [key: string]: VcsFile[] } = {};
         changedFiles.forEach(file => {
             const ext = file.path.split('.').pop()?.toLowerCase() || 'unknown';
             if (!fileTypes[ext]) {fileTypes[ext] = [];}
@@ -289,7 +294,7 @@ ${diff}
         analysis.push(`**文件类型分布**: ${fileTypeAnalysis}`);
         
         // === 2. 变更操作统计 ===
-        const statusCounts: { [key: string]: SvnFile[] } = {};
+        const statusCounts: { [key: string]: VcsFile[] } = {};
         changedFiles.forEach(file => {
             if (!statusCounts[file.status]) {statusCounts[file.status] = [];}
             statusCounts[file.status].push(file);
