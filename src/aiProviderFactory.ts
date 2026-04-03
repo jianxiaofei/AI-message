@@ -3,15 +3,6 @@ import { AIProvider, AIConfig } from './aiInterface';
 import { createProvider, CopilotProvider, OllamaProvider, QianwenProvider, WenxinProvider, ZhipuProvider, CustomProvider } from './providers';
 import { VcsFile } from './vcs';
 
-const PROVIDER_DEFAULTS: Record<string, { endpoint?: string; model: string }> = {
-    copilot: { model: 'gpt-4o' },
-    ollama: { endpoint: 'http://localhost:11434', model: 'qwen2.5:7b' },
-    qianwen: { model: 'qwen-plus' },
-    wenxin: { model: 'ernie-3.5-8k' },
-    zhipu: { model: 'glm-4' },
-    custom: { model: 'gpt-3.5-turbo' }
-};
-
 export class AIProviderFactory {
     static async createProvider(config: AIConfig): Promise<AIProvider> {
         return createProvider(config);
@@ -29,7 +20,9 @@ export class AIProviderFactory {
 
         const available: AIProvider[] = [];
         for (const p of allProviders) {
-            try { if (await p.isAvailable()) available.push(p); } catch {}
+            try {
+                if (await p.isAvailable()) available.push(p);
+            } catch {}
         }
         return available;
     }
@@ -38,7 +31,7 @@ export class AIProviderFactory {
         const config = vscode.workspace.getConfiguration('aiMessage');
         const provider = config.get('ai.provider', 'copilot');
         const defaults = PROVIDER_DEFAULTS[provider] || PROVIDER_DEFAULTS.custom;
-        
+
         return {
             provider: provider as AIConfig['provider'],
             apiKey: config.get('ai.apiKey', ''),
@@ -53,6 +46,15 @@ export class AIProviderFactory {
     }
 }
 
+const PROVIDER_DEFAULTS: Record<string, { endpoint?: string; model: string }> = {
+    copilot: { model: 'gpt-4o' },
+    ollama: { endpoint: 'http://localhost:11434', model: 'qwen2.5:7b' },
+    qianwen: { model: 'qwen-plus' },
+    wenxin: { model: 'ernie-3.5-8k' },
+    zhipu: { model: 'glm-4' },
+    custom: { model: 'gpt-3.5-turbo' }
+};
+
 export class AIService {
     private provider: AIProvider | null = null;
     private config: AIConfig;
@@ -60,7 +62,7 @@ export class AIService {
     constructor() {
         this.config = AIProviderFactory.getConfigFromSettings();
         this.refreshProvider();
-        
+
         vscode.workspace.onDidChangeConfiguration(event => {
             if (event.affectsConfiguration('aiMessage.ai')) {
                 this.config = AIProviderFactory.getConfigFromSettings();
@@ -70,20 +72,24 @@ export class AIService {
     }
 
     private async refreshProvider() {
-        try { this.provider = await AIProviderFactory.createProvider(this.config); }
-        catch (error) { console.error('创建AI提供商失败:', error); this.provider = null; }
+        try {
+            this.provider = await AIProviderFactory.createProvider(this.config);
+        } catch (error) {
+            console.error('创建 AI 提供商失败:', error);
+            this.provider = null;
+        }
     }
 
     getCurrentProvider(): AIProvider | null { return this.provider; }
 
     async generateCommitMessage(diff: string, changedFiles: VcsFile[]): Promise<string> {
         if (!this.provider) { await this.refreshProvider(); }
-        if (!this.provider) throw new Error('未配置可用的AI提供商');
+        if (!this.provider) throw new Error('未配置可用的 AI 提供商');
 
         if (!await this.provider.isAvailable()) {
             const fallback = await this.getFallbackProvider();
             if (fallback) return fallback.generateCommitMessage(diff, changedFiles);
-            throw new Error(`AI提供商 ${this.provider.name} 不可用`);
+            throw new Error(`AI 提供商 ${this.provider.name} 不可用`);
         }
 
         try {
@@ -100,7 +106,7 @@ export class AIService {
 
     private async getFallbackProvider(): Promise<AIProvider | null> {
         const available = await AIProviderFactory.getAvailableProviders(this.config);
-        const priorities = ['GitHub Copilot', 'Ollama', '通义千问', '文心一言', '智谱AI', '自定义API'];
+        const priorities = ['GitHub Copilot', 'Ollama', '通义千问', '文心一言', '智谱 AI', '自定义 API'];
         for (const name of priorities) {
             const p = available.find(x => x.name === name);
             if (p && p !== this.provider) return p;
@@ -111,14 +117,14 @@ export class AIService {
     private generateFallbackMessage(diff: string, changedFiles: VcsFile[]): string {
         const types = new Set(changedFiles.map(f => f.path.split('.').pop()?.toLowerCase()));
         const ops = new Set(changedFiles.map(f => f.status));
-        
+
         let type = 'chore', emoji = '🔧', subject = '更新代码';
         if (types.has('md')) { type = 'docs'; emoji = '📝'; subject = '更新文档'; }
         else if (types.has('json') && changedFiles.some(f => f.path.includes('package.json'))) { type = 'build'; emoji = '📦'; subject = '更新依赖'; }
         else if (ops.has('A')) { type = 'feat'; emoji = '✨'; subject = '添加新文件'; }
         else if (ops.has('D')) { type = 'chore'; emoji = '🔧'; subject = '删除文件'; }
         else if (ops.has('M')) { type = 'fix'; emoji = '🐛'; subject = '修复问题'; }
-        
+
         return `${emoji} ${type}(general): ${subject}`;
     }
 
@@ -135,11 +141,18 @@ export class AIService {
 
         const status: { name: string; available: boolean; error?: string }[] = [];
         for (const p of allProviders) {
-            try { status.push({ name: p.name, available: await p.isAvailable() }); }
-            catch (e) { status.push({ name: p.name, available: false, error: e instanceof Error ? e.message : '未知错误' }); }
+            try {
+                status.push({ name: p.name, available: await p.isAvailable() });
+            } catch (e) {
+                status.push({ name: p.name, available: false, error: e instanceof Error ? e.message : '未知错误' });
+            }
         }
         return status;
     }
 
     getCurrentProviderName(): string { return this.provider?.name || '未配置'; }
+}
+
+export function copyPaste(text: string): Thenable<string> {
+    return vscode.env.clipboard.writeText(text).then(() => text);
 }

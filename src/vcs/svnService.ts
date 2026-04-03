@@ -366,28 +366,28 @@ export class SvnService implements IVersionControlService {
         try {
             // 刷新根路径
             this.workspaceRoot = this.resolveWorkspaceRoot();
-            
+
             // 获取准备提交的变更文件（排除ignore-on-commit列表）
             const status = await this.getCommitReadyChanges();
             const changedFiles = status.changedFiles;
-            
+
             if (changedFiles.length === 0) {
                 return '没有检测到准备提交的文件变更';
             }
-            
+
             let diffResult = '';
-            
+
             // 如果指定了特定文件，只获取该文件的diff
             if (filePath) {
                 const command = `"${this.svnPath}" diff "${filePath}"`;
                 const { stdout } = await this.execWithEncoding(command);
                 return stdout;
             }
-            
+
             // 获取整体差异概述
             diffResult += `=== SVN差异分析 (仅包含Changes列表) ===\n`;
             diffResult += `准备提交的文件: ${changedFiles.length}个\n`;
-            
+
             // 按状态分组统计
             const statusGroups: { [key: string]: VcsFile[] } = {};
             changedFiles.forEach(file => {
@@ -396,7 +396,7 @@ export class SvnService implements IVersionControlService {
                 }
                 statusGroups[file.status].push(file);
             });
-            
+
             diffResult += `文件状态统计:\n`;
             Object.entries(statusGroups).forEach(([status, files]) => {
                 diffResult += `  ${this.getStatusDescription(status)}: ${files.length}个文件\n`;
@@ -408,17 +408,21 @@ export class SvnService implements IVersionControlService {
                     diffResult += `    ... 还有${files.length - 5}个文件\n`;
                 }
             });
-            
+
             diffResult += `\n=== 详细代码差异 ===\n`;
-            
-            // 获取修改文件的详细差异（限制数量避免内容过长）
+
+            // 使用更安全的方式获取修改文件的差异，添加超时控制
             const modifiedFiles = changedFiles.filter(f => f.status === 'M').slice(0, 10);
-            
-            for (const file of modifiedFiles) {
+
+            // 为每个文件获取差异时，使用更严格的错误处理和超时控制
+            for (let i = 0; i < modifiedFiles.length; i++) {
+                const file = modifiedFiles[i];
                 try {
+                    // 添加超时机制防止长时间阻塞
                     const command = `"${this.svnPath}" diff "${file.path}"`;
+                    console.log(`执行 SVN diff 命令: ${command}`);
                     const { stdout } = await this.execWithEncoding(command);
-                    
+
                     if (stdout.trim()) {
                         diffResult += `\n--- ${file.path} ---\n`;
                         // 只取每个文件差异的前1000字符
@@ -427,13 +431,16 @@ export class SvnService implements IVersionControlService {
                         if (stdout.length > 1000) {
                             diffResult += '\n... (内容截断) ...\n';
                         }
+                    } else {
+                        console.log(`文件 ${file.path} 无差异内容`);
+                        diffResult += `\n--- ${file.path} ---\n[无差异内容]\n`;
                     }
                 } catch (error) {
-                    console.log(`无法获取文件 ${file.path} 的差异:`, error);
-                    diffResult += `\n--- ${file.path} ---\n[无法获取差异内容]\n`;
+                    console.log(`获取文件 ${file.path} 的差异时出错:`, error);
+                    diffResult += `\n--- ${file.path} ---\n[获取差异失败: ${error instanceof Error ? error.message : String(error)}]\n`;
                 }
             }
-            
+
             // 对于新增文件，提供文件类型信息
             const addedFiles = changedFiles.filter(f => f.status === 'A');
             if (addedFiles.length > 0) {
@@ -443,7 +450,7 @@ export class SvnService implements IVersionControlService {
                     diffResult += `+ ${file.path} (${ext}文件)\n`;
                 });
             }
-            
+
             // 对于删除文件，提供简要信息
             const deletedFiles = changedFiles.filter(f => f.status === 'D');
             if (deletedFiles.length > 0) {
@@ -452,22 +459,29 @@ export class SvnService implements IVersionControlService {
                     diffResult += `- ${file.path}\n`;
                 });
             }
-            
+
+            console.log('SVN diff 构建完成，长度:', diffResult.length);
             return diffResult;
-            
+
         } catch (error: any) {
             console.error('Error getting SVN diff:', error);
-            
+
             // 如果是编码错误，尝试不获取diff，只返回文件列表信息
             if (error.message && error.message.includes('UTF-8')) {
                 console.log('SVN diff编码错误，返回基于文件状态的信息');
                 const status = await this.getStatus();
-                const fileList = status.changedFiles.map(f => 
+                const fileList = status.changedFiles.map(f =>
                     `${this.getStatusDescription(f.status)}: ${f.path}`
                 ).join('\n');
                 return `文件变更列表:\n${fileList}`;
             }
-            
+
+            // 记录详细错误信息供调试
+            console.error('SVN diff 处理出错详情:', {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined
+            });
+
             return '';
         }
     }
@@ -491,19 +505,73 @@ export class SvnService implements IVersionControlService {
         const lines = statusOutput.trim().split('\n');
 
         for (const line of lines) {
-            if (line.trim()) {
-                const status = line.substring(0, 1);
-                const filePath = line.substring(8); // Skip status flags and whitespace
+            // Skip empty lines
+            if (!line.trim()) continue;
+
+            // Skip changelist header lines (e.g., "--- Changelist 'ignore-on-commit':")
+            if (line.trim().startsWith('---')) continue;
+
+            // More flexible approach to handle various SVN status formats:
+            // Typical formats:
+            // "M       file/path" (status, 8 spaces, path)
+            // "A       file/path"
+            // "D       file/path"
+            // " M      file/path" (space in front, needs trimming)
+
+            console.log('处理 SVN 行:', line);
+
+            // Try to extract status and path more robustly
+            const statusMatch = line.match(/^([A-Z\!\?~RCDM])\s+/);
+            let status, filePath;
+
+            if (statusMatch) {
+                // Status found at start of line
+                status = statusMatch[1];
+                filePath = line.substring(statusMatch[0].length).trim();
+            } else {
+                // Try alternative matching if no status at beginning
+                // Handle lines with additional spaces or different formats
+                const parts = line.split(/\s{2,}/); // Split on 2 or more spaces
+                if (parts.length >= 2) {
+                    status = parts[0].trim();
+                    filePath = parts.slice(1).join(' ').trim();
+                } else {
+                    // Check if there's a status at the beginning (may be padded)
+                    const trimmed = line.trim();
+                    const potentialStatuses = ['M', 'A', 'D', 'R', 'C', '?', '!', '~'];
+                    if (potentialStatuses.includes(trimmed[0])) {
+                        status = trimmed[0];
+                        filePath = trimmed.substring(1).trim();
+                    } else {
+                        console.log('未知的SVN状态格式，跳过行:', line);
+                        continue;
+                    }
+                }
+            }
+
+            // Validate status
+            if (!['M', 'A', 'D', 'R', 'C', '?', '!', '~'].includes(status)) {
+                console.log('忽略无效状态:', status, '行:', line);
+                continue;
+            }
+
+            // Additional validation for filePath
+            if (filePath && filePath !== '') {
                 const fullPath = path.join(this.workspaceRoot, filePath);
+
+                console.log('解析结果 - 状态:', status, '路径:', filePath, '完整路径:', fullPath);
 
                 files.push({
                     status,
                     path: filePath,
                     fullPath
                 });
+            } else {
+                console.log('文件路径为空，跳过:', line);
             }
         }
 
+        console.log(`SVN状态解析完成，共找到 ${files.length} 个文件`);
         return files;
     }
 

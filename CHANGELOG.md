@@ -5,6 +5,13 @@ AI-message 扩展的所有重要变更都将记录在这个文件中。
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.0.50] - 2026-04-03
+
+### 🐛 修复
+
+- **SVN 流式生成卡住**：修复在 SVN 仓库中生成提交信息时，进度通知卡在"准备流式..."的问题。根本原因是中间进度更新调用 `setScmInputBox` 时，找不到 SVN SCM API 而走 fallback 分支，`await showInformationMessage` 阻塞等待用户点击，现改为 `silent=true` 跳过中间更新的弹窗。
+- **进度通知不关闭**：修复流式生成完成后，进度通知一直显示"实时生成中..."的问题。根本原因是最终写入 SCM 输入框时 fallback 的 `await showInformationMessage` 阻塞了 `withProgress` 回调返回，现改为非阻塞 `.then()` 调用，进度通知可正常关闭。
+
 ## [0.0.43] - 2025-09-19
 
 ### ✨ 新增功能
