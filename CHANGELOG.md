@@ -5,6 +5,16 @@ AI-message 扩展的所有重要变更都将记录在这个文件中。
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.1.4] - 2026-04-03
+
+### 🐛 修复
+
+- **Copilot 退出登录后生成流程可能挂起**：为 `selectChatModels` 增加超时保护，避免在未登录或不可用时让界面长时间停留在生成中。
+- **大 diff 场景下远程模型容易超时**：限制提交提示词中的 diff 长度，避免请求体过大导致远程模型响应过慢。
+- **通义千问默认超时过短**：将默认超时提升到 90 秒，更适配远程模型在复杂改动下的响应时间。
+- **远程模型请求链路不一致**：新增 `curlClient`，统一 Qwen 与 GLM/智谱的远程请求、超时和错误处理逻辑，便于稳定性排查。
+- **非 Copilot 提供商 fallback 误触发 Copilot 检查**：优化 fallback 逻辑，用户显式配置非 Copilot 提供商时跳过 Copilot 探测。
+
 ## [0.1.3] - 2026-04-03
 
 ### 🐛 修复
