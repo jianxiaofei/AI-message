@@ -15,11 +15,11 @@ export class QianwenProvider implements AIProvider {
         const model = this.config.model || 'qwen-plus';
         const prompt = buildPrompt(diff, changedFiles, this.config.language);
 
-        const response = await fetch('https://dashscope.aliyuncs.com/api/v1/apps/chat/completions', {
+        const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-DashScope-Api-Key': this.config.apiKey || ''
+                'Authorization': `Bearer ${this.config.apiKey || ''}`
             },
             body: JSON.stringify({
                 model,

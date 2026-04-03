@@ -15,7 +15,7 @@ export class ZhipuProvider implements AIProvider {
         const model = this.config.model || 'glm-4';
         const prompt = buildPrompt(diff, changedFiles, this.config.language);
 
-        const response = await fetch('https://open.bigmodel.cn/api/paliv0/chat/completions', {
+        const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

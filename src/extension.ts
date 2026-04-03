@@ -70,20 +70,36 @@ async function generate() {
             const status = await vcs.getCommitReadyChanges();
             const files = status.changedFiles;
 
-            progress.report({ increment: 40, message: '准备流式...' });
-            await setScmInputBox(`🤖 正在分析 ${files.length} 个文件变更...`, true);
+            const isCopilot = aiService.getCurrentProviderName() === 'GitHub Copilot';
 
-            try {
-                progress.report({ increment: 55, message: '模型流式生成中...' });
-                await streamGenerate(diff, files, progress);
-                progress.report({ increment: 100, message: '完成' });
-                vscode.window.showInformationMessage('✅ 提交信息已生成');
-            } catch (e) {
-                console.error('[AI-Message] 流式生成失败', e);
+            if (isCopilot) {
+                // Copilot：流式生成
+                progress.report({ increment: 40, message: '准备流式...' });
+                await setScmInputBox(`🤖 正在分析 ${files.length} 个文件变更...`, true);
+                try {
+                    progress.report({ increment: 55, message: '模型流式生成中...' });
+                    await streamGenerate(diff, files, progress);
+                    progress.report({ increment: 100, message: '完成' });
+                    vscode.window.showInformationMessage('✅ 提交信息已生成');
+                } catch (e) {
+                    console.error('[AI-Message] 流式生成失败，尝试非流式', e);
+                    progress.report({ increment: 70, message: '切换非流式...' });
+                    const msg = await aiService.generateCommitMessage(diff, files);
+                    if (msg) {
+                        await setScmInputBox(formatFinalCommit(msg, files));
+                        vscode.window.showInformationMessage('⚠️ 已使用非流式方式生成提交信息');
+                    } else {
+                        vscode.window.showErrorMessage('无法生成提交信息');
+                    }
+                }
+            } else {
+                // 非 Copilot 提供商：直接调用 API，无需流式
+                progress.report({ increment: 40, message: `${aiService.getCurrentProviderName()} 生成中...` });
                 const msg = await aiService.generateCommitMessage(diff, files);
                 if (msg) {
                     await setScmInputBox(formatFinalCommit(msg, files));
-                    vscode.window.showInformationMessage('⚠️ 已使用非流式方式生成提交信息');
+                    progress.report({ increment: 100, message: '完成' });
+                    vscode.window.showInformationMessage('✅ 提交信息已生成');
                 } else {
                     vscode.window.showErrorMessage('无法生成提交信息');
                 }

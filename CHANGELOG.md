@@ -5,6 +5,16 @@ AI-message 扩展的所有重要变更都将记录在这个文件中。
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.1.3] - 2026-04-03
+
+### 🐛 修复
+
+- **非 Copilot 提供商卡在"模型流式生成中..."**：修复使用通义千问、智谱 AI 等本地/第三方模型时，进度通知长时间卡住的问题。根本原因有两个：
+  1. `generate()` 对所有提供商都先走 Copilot 流式路径（必然失败），在 catch 块中再调用实际 API，期间进度消息无变化、误导用户；现改为检测当前提供商是否为 Copilot，非 Copilot 直接调用对应 API，跳过无效的流式尝试。
+  2. Qianwen API endpoint 错误（`apps/chat/completions` → `compatible-mode/v1/chat/completions`），导致请求挂起 30s 才超时。
+- **智谱 AI API endpoint 拼写错误**：`paliv0` → `paas/v4`（`open.bigmodel.cn/api/paas/v4/chat/completions`）。
+- **Qianwen 鉴权头错误**：从私有 `X-DashScope-Api-Key` 改为标准 `Authorization: Bearer`（OpenAI 兼容接口要求）。
+
 ## [0.1.2] - 2026-04-03
 
 ### 🐛 修复
