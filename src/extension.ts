@@ -126,9 +126,15 @@ async function streamGenerate(diff: string, files: VcsFile[], progress: vscode.P
 }
 
 function formatFinalCommit(raw: string, files: VcsFile[]): string {
-    const parsed = parseConventionalCommit(raw);
     const config = vscode.workspace.getConfiguration('aiMessage');
+    const template = config.get<string>('commitTemplate', '');
 
+    // 如果用户配置了模板，直接用 AI 输出替换 {message} 占位符
+    if (template && template.includes('{message}')) {
+        return template.replace('{message}', raw.trim());
+    }
+
+    const parsed = parseConventionalCommit(raw);
     return formatCommitMessage(parsed, {
         enableEmoji: config.get('commit.enableEmoji', true),
         enableBody: config.get('commit.enableBody', true),

@@ -5,6 +5,13 @@ AI-message 扩展的所有重要变更都将记录在这个文件中。
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.1.2] - 2026-04-03
+
+### 🐛 修复
+
+- **`commitTemplate` 配置完全不生效**：修复 `aiMessage.commitTemplate` 设置后毫无作用的问题。根本原因是该配置项只在 `package.json` 中定义，但源码中从未读取。现在在 `formatFinalCommit` 中加入读取逻辑：若用户配置了含 `{message}` 占位符的模板（如 `"feat: {message}"`、`"JIRA-123: {message}"`），将用 AI 生成的原始内容直接替换 `{message}`，并跳过常规 Conventional Commit 格式化流程。
+- 同步更新 `aiMessage.commitTemplate` 配置项描述，说明用法和示例。
+
 ## [0.1.1] - 2026-04-03
 
 ### 🐛 修复

@@ -2,7 +2,7 @@
   "name": "ai-message",
   "displayName": "AI-message",
   "description": "Generate intelligent commit messages using multiple AI providers (GitHub Copilot, Ollama, Qianwen, Wenxin, Zhipu) for Git and SVN repositories",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "jianxiaofei",
   "repository": {
     "type": "git",
@@ -175,7 +175,7 @@
         "aiMessage.commitTemplate": {
           "type": "string",
           "default": "",
-          "description": "提交信息模板 (可选，用 {message} 占位符)",
+          "description": "提交信息模板，用 {message} 作为 AI 生成内容的占位符。例如：\"JIRA-123: {message}\" 或 \"feat: {message}\"。设置后将跳过常规格式化直接套用模板。",
           "order": 8
         },
         "aiMessage.enableFallback": {
