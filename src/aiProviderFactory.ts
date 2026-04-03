@@ -29,15 +29,17 @@ export class AIProviderFactory {
 
     static getConfigFromSettings(): AIConfig {
         const config = vscode.workspace.getConfiguration('aiMessage');
-        const provider = config.get('ai.provider', 'copilot');
+        const provider = config.get<string>('ai.provider', 'copilot');
         const defaults = PROVIDER_DEFAULTS[provider] || PROVIDER_DEFAULTS.custom;
+
+        const defaultTimeout = provider === 'qianwen' ? 90000 : 30000;
 
         return {
             provider: provider as AIConfig['provider'],
             apiKey: config.get('ai.apiKey', ''),
             model: config.get('ai.model', defaults.model),
             endpoint: config.get('ai.endpoint', defaults.endpoint || ''),
-            timeout: config.get('ai.timeout', 30000),
+            timeout: config.get('ai.timeout', defaultTimeout),
             enableEmoji: config.get('commit.enableEmoji', true),
             enableBody: config.get('commit.enableBody', true),
             enableScope: config.get('commit.enableScope', true),
@@ -95,21 +97,26 @@ export class AIService {
         try {
             return await this.provider.generateCommitMessage(diff, changedFiles);
         } catch (error) {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            console.error(`[AI-Message] ${this.provider.name} 调用失败: ${errMsg}`);
             const fallback = await this.getFallbackProvider();
-            if (fallback) return fallback.generateCommitMessage(diff, changedFiles);
+            if (fallback) { return fallback.generateCommitMessage(diff, changedFiles); }
             if (vscode.workspace.getConfiguration('aiMessage').get('enableFallback', true)) {
                 return this.generateFallbackMessage(diff, changedFiles);
             }
-            throw error;
+            throw new Error(`${this.provider.name} 调用失败: ${errMsg}`);
         }
     }
 
     private async getFallbackProvider(): Promise<AIProvider | null> {
         const available = await AIProviderFactory.getAvailableProviders(this.config);
+        // 若用户明确配置了非 Copilot 提供商，不把 Copilot 作为 fallback（避免 selectChatModels 挂起）
+        const skipCopilot = this.config.provider !== 'copilot';
         const priorities = ['GitHub Copilot', 'Ollama', '通义千问', '文心一言', '智谱 AI', '自定义 API'];
         for (const name of priorities) {
+            if (skipCopilot && name === 'GitHub Copilot') { continue; }
             const p = available.find(x => x.name === name);
-            if (p && p !== this.provider) return p;
+            if (p && p !== this.provider) { return p; }
         }
         return null;
     }

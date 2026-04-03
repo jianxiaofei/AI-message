@@ -2,7 +2,7 @@
   "name": "ai-message",
   "displayName": "AI-message",
   "description": "Generate intelligent commit messages using multiple AI providers (GitHub Copilot, Ollama, Qianwen, Wenxin, Zhipu) for Git and SVN repositories",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "jianxiaofei",
   "repository": {
     "type": "git",
@@ -154,10 +154,10 @@
         },
         "aiMessage.ai.timeout": {
           "type": "number",
-          "default": 30000,
+          "default": 90000,
           "minimum": 5000,
           "maximum": 120000,
-          "description": "API 请求超时时间（毫秒）",
+          "description": "API 请求超时时间（毫秒）。通义千问等远程模型在大 diff 场景下可能需要更长时间。",
           "order": 5
         },
         "aiMessage.svn.path": {

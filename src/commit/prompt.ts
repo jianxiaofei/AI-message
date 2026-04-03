@@ -10,6 +10,10 @@ export function buildPrompt(diff: string, changedFiles: VcsFile[], language: str
         .join('\n');
 
     const fileTypes = [...new Set(changedFiles.map(f => f.path.split('.').pop()?.toLowerCase() || 'unknown'))];
+    const MAX_DIFF_LENGTH = 12000;
+    const truncatedDiff = diff.length > MAX_DIFF_LENGTH
+        ? `${diff.slice(0, MAX_DIFF_LENGTH)}\n\n[diff truncated: total ${diff.length} chars]`
+        : diff;
 
     const prompt = `
 <instruction>
@@ -21,7 +25,7 @@ ${fileList}
 **文件类型**: ${fileTypes.join(', ')}
 
 **代码变更详情**:
-${diff}
+${truncatedDiff}
 
 **生成要求**:
 1. 遵循 Conventional Commit 规范：type(scope): subject

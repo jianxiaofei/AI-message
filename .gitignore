@@ -4,7 +4,7 @@ dist/
 
 # Dependencies
 node_modules/
-
+test
 # VS Code test files
 .vscode-test/
 .vscode-test.mjs

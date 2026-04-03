@@ -1,6 +1,7 @@
 import { AIProvider, AIConfig } from '../aiInterface';
 import { VcsFile } from '../vcsInterface';
 import { buildPrompt } from '../commit/prompt';
+import { postJsonWithCurl } from './curlClient';
 
 export class QianwenProvider implements AIProvider {
     readonly name = '通义千问';
@@ -14,26 +15,32 @@ export class QianwenProvider implements AIProvider {
     async generateCommitMessage(diff: string, changedFiles: VcsFile[]): Promise<string> {
         const model = this.config.model || 'qwen-plus';
         const prompt = buildPrompt(diff, changedFiles, this.config.language);
+        const timeoutMs = this.config.timeout || 30000;
+        const body = JSON.stringify({
+            model,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.7,
+            stream: false
+        });
 
-        const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
-            method: 'POST',
+        console.log(`[AI-Message] 通义千问 请求开始，model=${model}, promptLength=${prompt.length}, timeout=${timeoutMs}`);
+        const stdout = await postJsonWithCurl({
+            url: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${this.config.apiKey || ''}`
             },
-            body: JSON.stringify({
-                model,
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.7
-            }),
-            signal: AbortSignal.timeout(this.config.timeout || 30000)
+            body,
+            timeoutMs,
+            providerName: this.name,
+            noProxy: true
         });
 
-        if (!response.ok) {
-            throw new Error(`通义千问 API 错误：${response.statusText}`);
+        try {
+            const parsed = JSON.parse(stdout) as { choices?: Array<{ message?: { content?: string } }> };
+            return parsed.choices?.[0]?.message?.content || '';
+        } catch {
+            throw new Error(`响应解析失败: ${stdout.slice(0, 100)}`);
         }
-
-        const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-        return data.choices?.[0]?.message?.content || '';
     }
 }

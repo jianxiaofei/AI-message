@@ -8,7 +8,12 @@ export class CopilotProvider implements AIProvider {
 
     async isAvailable(): Promise<boolean> {
         try {
-            const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+            const models = await Promise.race([
+                vscode.lm.selectChatModels({ vendor: 'copilot' }),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('timeout')), 3000)
+                )
+            ]);
             return models.length > 0;
         } catch {
             return false;
@@ -16,8 +21,17 @@ export class CopilotProvider implements AIProvider {
     }
 
     async generateCommitMessage(diff: string, changedFiles: VcsFile[]): Promise<string> {
-        const models = await vscode.lm.selectChatModels({ vendor: 'copilot', family: 'gpt-4o' });
-        const model = models[0] || (await vscode.lm.selectChatModels({ vendor: 'copilot' }))[0];
+        const timeout = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('GitHub Copilot 模型选择超时')), 5000)
+        );
+        const models = await Promise.race([
+            vscode.lm.selectChatModels({ vendor: 'copilot', family: 'gpt-4o' }),
+            timeout
+        ]).catch(() => [] as vscode.LanguageModelChat[]);
+        const model = models[0] || await Promise.race([
+            vscode.lm.selectChatModels({ vendor: 'copilot' }),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+        ]).catch(() => undefined);
 
         if (!model) {
             throw new Error('GitHub Copilot 未安装或未登录');

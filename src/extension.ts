@@ -70,7 +70,8 @@ async function generate() {
             const status = await vcs.getCommitReadyChanges();
             const files = status.changedFiles;
 
-            const isCopilot = aiService.getCurrentProviderName() === 'GitHub Copilot';
+            const providerSetting = vscode.workspace.getConfiguration('aiMessage').get<string>('ai.provider', 'copilot');
+            const isCopilot = providerSetting === 'copilot';
 
             if (isCopilot) {
                 // Copilot：流式生成
